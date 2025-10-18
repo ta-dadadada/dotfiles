@@ -1,0 +1,9 @@
+# Load environment configurations
+if [[ -d "$HOME/.zshenv.d" ]]; then
+  for file in "$HOME/.zshenv.d"/*.zsh; do
+    if [[ -r "$file" ]]; then
+      source "$file" || echo "Warning: Failed to load $file" >&2
+    fi
+  done
+  unset file
+fi

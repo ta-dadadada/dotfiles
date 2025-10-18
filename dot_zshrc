@@ -1,0 +1,9 @@
+# Load interactive shell configurations
+if [[ -d "$HOME/.zshrc.d" ]]; then
+  for file in "$HOME/.zshrc.d"/*.zsh; do
+    if [[ -r "$file" ]]; then
+      source "$file" || echo "Warning: Failed to load $file" >&2
+    fi
+  done
+  unset file
+fi
