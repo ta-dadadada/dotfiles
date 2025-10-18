@@ -7,3 +7,6 @@ if [[ -d "$HOME/.zshrc.d" ]]; then
   done
   unset file
 fi
+
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
