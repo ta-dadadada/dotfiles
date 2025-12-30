@@ -1,0 +1,28 @@
+# フォント設定
+font-family = "DejaVuSansMono Nerd Font"
+font-size = 13
+
+# 行間の調整
+adjust-cell-height = 10%
+
+# 背景の透過とブラー
+background-opacity = 0.95
+background-blur = true
+
+# カーソル設定
+cursor-style = block
+cursor-style-blink = false
+
+# 【重要】JISキーボードの円マークキーをバックスラッシュとして扱う
+keybind = ¥=text:\\
+
+# macOS特有の設定
+macos-option-as-alt = true
+window-decoration = true
+
+# --- ローカル設定の読み込み ---
+# ファイルが存在する場合のみ読み込む（エラー回避）
+{{- $localConf := joinPath .chezmoi.homeDir ".config/ghostty/local.config" }}
+{{- if stat $localConf }}
+config-file = "local.config"
+{{- end }}

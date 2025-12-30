@@ -3,3 +3,4 @@ README.md
 .gitignore
 .github
 LICENSE
+.config/ghostty/local.config
