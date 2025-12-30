@@ -9,3 +9,6 @@ fi
 if command -v mise >/dev/null 2>&1; then
   eval "$(mise activate zsh)"
 fi
+
+# Added by Antigravity
+export PATH="/Users/tadaair/.antigravity/antigravity/bin:$PATH"
