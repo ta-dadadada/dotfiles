@@ -12,3 +12,8 @@ fi
 
 # Added by Antigravity
 export PATH="/Users/tadaair/.antigravity/antigravity/bin:$PATH"
+
+# gpg
+# Require gpg, pinentry-mac
+export GPG_TTY=$(tty)
+
