@@ -16,5 +16,3 @@ SAVEHIST=100000
 # Enable colors
 autoload -Uz colors && colors
 
-# Enable completion system
-autoload -Uz compinit && compinit -u

@@ -1,5 +1,5 @@
-autoload -Uz compinit
-compinit
+# Enable completion system
+autoload -Uz compinit && compinit -u
 
 # Load interactive shell configurations
 if [[ -d "$HOME/.zshrc.d" ]]; then
