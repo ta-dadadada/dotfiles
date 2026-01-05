@@ -11,6 +11,11 @@ fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+
+if [[ -f "$HOME/.zshrc.local" ]]; then
+    source "$HOME/.zshrc.local"
+fi
+
 if [[ -z "$TMUX" ]]; then
     tmux attach || tmux
 fi
