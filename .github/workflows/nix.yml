@@ -1,0 +1,53 @@
+name: Nix
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  home-manager:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-24.04
+          - macos-26
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c # v31.10.7
+
+      - name: Scan secrets
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          trivy-config: trivy.yaml
+          version: v0.72.0
+
+      - name: Render chezmoi templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/home"
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' dot_config/nix/flake.lock)
+          nix run "github:NixOS/nixpkgs/$nixpkgs_rev#chezmoi" -- \
+            --source "$GITHUB_WORKSPACE" \
+            --destination "$destination" \
+            --no-tty \
+            apply --exclude scripts
+
+      - name: Check flake
+        shell: bash
+        run: nix flake check "$RUNNER_TEMP/home/.config/nix"
+
+      - name: Build Home Manager activation package
+        shell: bash
+        run: nix build "$RUNNER_TEMP/home/.config/nix#homeConfigurations.default.activationPackage"
