@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -eu
+
+if ! command -v trivy >/dev/null 2>&1; then
+  echo "Trivyが見つかりません。Nix環境を適用してから再実行してください。" >&2
+  exit 1
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+staged_dir=$(mktemp -d)
+trap 'rm -rf "$staged_dir"' EXIT HUP INT TERM
+
+# Git indexを一時ディレクトリへ展開し、コミット対象だけを検査する。
+git checkout-index --all --prefix="$staged_dir/"
+trivy fs --config "$repo_root/trivy.yaml" "$staged_dir"

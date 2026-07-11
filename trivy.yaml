@@ -1,0 +1,9 @@
+quiet: true
+exit-code: 1
+
+scan:
+  scanners:
+    - secret
+
+secret:
+  config: trivy-secret.yaml

@@ -2,5 +2,8 @@ README.md
 .git
 .gitignore
 .github
+.githooks
 LICENSE
+trivy-secret.yaml
+trivy.yaml
 .config/ghostty/local.config
