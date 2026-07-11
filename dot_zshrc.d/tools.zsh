@@ -10,10 +10,11 @@ if command -v mise >/dev/null 2>&1; then
   eval "$(mise activate zsh)"
 fi
 
-# Added by Antigravity
-export PATH="/Users/tadaair/.antigravity/antigravity/bin:$PATH"
+# Antigravity
+if [[ -d "$HOME/.antigravity/antigravity/bin" ]]; then
+  export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
+fi
 
 # gpg
 # Require gpg, pinentry-mac
 export GPG_TTY=$(tty)
-

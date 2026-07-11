@@ -9,6 +9,13 @@ adjust-cell-height = 10%
 background-opacity = 0.95
 background-blur = true
 
+{{- if eq .chezmoi.os "darwin" }}
+# ランダム背景画像
+background-image = "{{ joinPath .chezmoi.homeDir ".config/ghostty/current_bg" }}"
+background-image-fit = cover
+background-image-opacity = 0.1
+{{- end }}
+
 # カーソル設定
 cursor-style = block
 cursor-style-blink = false

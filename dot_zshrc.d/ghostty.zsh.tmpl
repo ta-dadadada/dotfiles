@@ -1,0 +1,27 @@
+{{- if eq .chezmoi.os "darwin" }}
+# Ghosttyの背景画像をランダムに切り替える。
+shuffle_bg() {
+  local bg_dir="$HOME/Pictures/wallpapers"
+  local images=("$bg_dir"/*.(jpg|jpeg|png|webp)(N.))
+
+  if (( ${#images} == 0 )); then
+    echo "背景画像が見つかりません: $bg_dir" >&2
+    return 1
+  fi
+
+  local random_img="${images[$RANDOM % ${#images} + 1]}"
+  local link_path="$HOME/.config/ghostty/current_bg"
+
+  mkdir -p "${link_path:h}"
+  ln -sfn "$random_img" "$link_path"
+
+  if [[ -f "$HOME/.config/ghostty/config" ]]; then
+    touch "$HOME/.config/ghostty/config"
+  fi
+}
+
+# 初回だけ背景画像へのリンクを作成する。以降はshuffle_bgを明示的に実行する。
+if [[ "${TERM_PROGRAM:-}" == "ghostty" && ! -e "$HOME/.config/ghostty/current_bg" ]]; then
+  shuffle_bg
+fi
+{{- end }}

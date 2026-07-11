@@ -19,6 +19,10 @@ if [[ -f "$HOME/.zshrc.local" ]]; then
     source "$HOME/.zshrc.local"
 fi
 
-if [[ -z "$TMUX" ]]; then
-    tmux attach || tmux
+if [[ -o interactive ]] \
+  && [[ -z "${TMUX:-}" ]] \
+  && [[ -z "${CI:-}" ]] \
+  && [[ -z "${SSH_CONNECTION:-}" ]] \
+  && command -v tmux >/dev/null 2>&1; then
+  exec tmux
 fi

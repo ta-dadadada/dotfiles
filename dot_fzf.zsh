@@ -1,7 +1,5 @@
-# Setup fzf
-# ---------
-if [[ ! "$PATH" == */opt/homebrew/opt/fzf/bin* ]]; then
-  PATH="${PATH:+${PATH}:}/opt/homebrew/opt/fzf/bin"
+if ! command -v fzf >/dev/null 2>&1; then
+  return
 fi
 
 source <(fzf --zsh)

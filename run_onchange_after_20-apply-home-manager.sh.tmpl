@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# nix-available={{ ne (lookPath "nix") "" }}
+# platform={{ .chezmoi.os }}/{{ .chezmoi.arch }}
+# user={{ .chezmoi.username }}
+# home={{ .chezmoi.homeDir }}
+# flake-hash={{ include "dot_config/nix/flake.nix.tmpl" | sha256sum }}
+# home-hash={{ include "dot_config/nix/home.nix" | sha256sum }}
+# lock-hash={{ include "dot_config/nix/flake.lock" | sha256sum }}
+# nix-conf-hash={{ include "dot_config/nix/nix.conf" | sha256sum }}
+
+set -eu
+
+case "{{ .chezmoi.os }}/{{ .chezmoi.arch }}" in
+  darwin/arm64|linux/amd64)
+    ;;
+  *)
+    echo "Home Manager: unsupported platform: {{ .chezmoi.os }}/{{ .chezmoi.arch }}" >&2
+    exit 0
+    ;;
+esac
+
+if ! command -v nix >/dev/null 2>&1; then
+  echo "Nix is not installed or is not available on PATH." >&2
+  echo "Install Nix from https://nixos.org/download/, restart the terminal, then run: chezmoi apply" >&2
+  exit 0
+fi
+
+flake={{ joinPath .chezmoi.homeDir ".config/nix" | quote }}
+activation_path=$(nix build \
+  --no-link \
+  --print-out-paths \
+  "$flake#homeConfigurations.default.activationPackage")
+
+"$activation_path/activate"
