@@ -37,6 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           destination="$RUNNER_TEMP/home"
+          mkdir -p "$destination"
           nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' dot_config/nix/flake.lock)
           nix run "github:NixOS/nixpkgs/$nixpkgs_rev#chezmoi" -- \
             --source "$GITHUB_WORKSPACE" \
