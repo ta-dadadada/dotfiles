@@ -6,8 +6,10 @@ if [[ "$TERM_PROGRAM" == "kiro" ]] && command -v kiro >/dev/null 2>&1; then
 fi
 
 # mise (polyglot runtime manager)
-if command -v mise >/dev/null 2>&1; then
-  eval "$(mise activate zsh)"
+if [[ -x "$HOME/.nix-profile/bin/mise" ]]; then
+  eval "$("$HOME/.nix-profile/bin/mise" activate zsh)"
+elif command -v mise >/dev/null 2>&1; then
+  eval "$(command mise activate zsh)"
 fi
 
 # Antigravity

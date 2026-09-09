@@ -15,12 +15,9 @@
     google-cloud-sdk
     jq
     jdk17
-    kubectl
-    kubernetes-helm
     mise
     ripgrep
     starship
-    terraform
     tmux
     trivy
     zoxide

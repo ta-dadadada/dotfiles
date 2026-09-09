@@ -7,7 +7,7 @@ CLI環境をNix、Home Manager、mise、個人設定をchezmoiで管理するdot
 | 管理ツール | 対象 |
 | --- | --- |
 | Nix / Home Manager | 基盤CLI、クラウドCLI、mise、chezmoi |
-| mise | Node.js、pnpm、Bun、Python、uv、Granted、npm製CLI |
+| mise | ランタイム、バージョン切り替え対象のCLI、Granted、npm製CLI |
 | chezmoi | zsh、mise、tmux、Ghostty、Emacsなどの個人設定 |
 | Homebrew | macOSのGUIアプリとNixで扱わないパッケージ |
 
@@ -42,7 +42,7 @@ nix --extra-experimental-features 'nix-command flakes' \
 chezmoi apply
 ```
 
-`run_onchange_after`が`flake.lock`で固定されたHome Managerのactivation packageをビルドしてCLI環境を有効化し、続けてmiseのグローバル設定に固定されたツールを導入します。Nixまたはmise未導入時の実行状態もスクリプト内容に含まれるため、導入後の`chezmoi apply`で再実行されます。
+`run_onchange_after`が`flake.lock`で固定されたHome Managerのactivation packageをビルドしてCLI環境を有効化し、続けてmiseのグローバル設定に指定されたツールを導入します。Nixまたはmise未導入時の実行状態もスクリプト内容に含まれるため、導入後の`chezmoi apply`で再実行されます。
 
 ## 管理するCLI
 
@@ -50,7 +50,7 @@ chezmoi apply
 - 開発支援: gh、ghq、zoxide、starship、direnv、Java 17、mise、chezmoi
 - クラウド: kubectl、Helm、Terraform、AWS CLI、Google Cloud SDK
 
-Node.js、pnpm、Bun、Python、uv、Granted、npm製CLIはmiseで管理し、Nixとの二重管理を避けます。グローバル既定値は正確なバージョンに固定し、プロジェクト固有のバージョンは各リポジトリの`mise.toml`で上書きします。
+Node.js、pnpm、Bun、Python、uv、Granted、npm製CLI、Yarn、kubectl、Helm、Terraformはmiseで管理し、Nixとの二重管理を避けます。グローバル既定値は互換性を保つリリース系列で指定し、プロジェクト固有のバージョンは各リポジトリの`mise.toml`で上書きします。Grantedだけは対応プラットフォームに配布物がある正確なバージョンへ固定します。
 
 Android SDKはAndroid Studioなどでローカルに導入し、chezmoiがOS別の標準パスを検出して`ANDROID_SDK_ROOT`とPATHを設定します。
 
@@ -72,6 +72,13 @@ miseで管理するツールだけを手動で再適用する場合は次を実�
 
 ```sh
 mise install
+```
+
+設定したリリース系列内の最新版へ更新する場合は、更新後のバージョンを確認してからアップグレードします。
+
+```sh
+mise outdated
+mise upgrade
 ```
 
 NixpkgsとHome Managerを更新する場合は、chezmoiのソースディレクトリでロックファイルを更新します。
@@ -120,12 +127,14 @@ home-manager generations
 
 ## Homebrewからの段階移行
 
-Nix版のCLIが正常に動作することを確認してから、重複するHomebrewパッケージを個別に削除します。GUIアプリとHomebrew Caskは今回の移行対象外です。
+Nix版とmise版のCLIが正常に動作することを確認してから、重複するHomebrewパッケージを個別に削除します。GUIアプリとHomebrew Caskは今回の移行対象外です。
 
 ```sh
 command -v git tmux fzf rg fd bat jq eza gh ghq zoxide starship direnv java gcloud mise chezmoi
-command -v node pnpm bun python uv granted assume devcontainer gemini
+command -v node npm npx pnpm yarn yarnpkg bun python uv granted assume devcontainer gemini kubectl helm terraform
 ```
+
+Voltaからの移行時は、上記の代替コマンドをmiseで確認した後、`~/.volta`を`~/.volta.retired`へ自動的に退避します。退避先は自動削除しません。`pnpx`は廃止し、必要な場合は`pnpm dlx`を使用します。
 
 ## zsh設定
 
@@ -151,8 +160,9 @@ command -v node pnpm bun python uv granted assume devcontainer gemini
 - `prc`: GitHub Pull Requestを選択してcheckoutする
 - `zfcd`: zoxideの履歴から移動する
 - `pzkill`: プロセスを選択して終了する
+- `fassume`: AWSプロファイルを選択し、Grantedで現在のシェルへ反映する
 - `shuffle_bg`: Ghosttyの背景画像をランダムに切り替える（macOSのみ）
 
 ## `.zshrc.local`からの移行
 
-Java、Android SDK、Google Cloud SDK、Ghostty背景設定はリポジトリへ取り込み済みです。Node.js、pnpm、Bun、Python、uvはmiseへ移行済みです。既存の`~/.zshrc.local`に同じ設定が残っている場合は、Nix、mise、chezmoiの適用を確認してから該当部分を削除してください。
+Java、Android SDK、Google Cloud SDK、Ghostty背景設定はリポジトリへ取り込み済みです。Node.js、pnpm、Bun、Python、uv、Yarn、kubectl、Helm、Terraformはmiseへ移行済みです。既存の`~/.zshrc.local`に同じ設定が残っている場合は、Nix、mise、chezmoiの適用を確認してから該当部分を削除してください。

@@ -19,7 +19,6 @@
         config.allowUnfreePredicate = pkg:
           builtins.elem (nixpkgs.lib.getName pkg) [
             "google-cloud-sdk"
-            "terraform"
           ];
       };
 

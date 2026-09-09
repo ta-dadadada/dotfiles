@@ -20,7 +20,8 @@
 - `dot_zshrc`, `dot_zshrc.d/`: 対話シェルの初期化、エイリアス、補助関数
 - `dot_config/ghostty/`, `dot_tmux.conf`, `dot_emacs`: 各アプリケーションの設定
 - `run_onchange_after_20-apply-home-manager.sh.tmpl`: Home Manager の activation package をビルドして適用するスクリプト
-- `run_onchange_after_25-install-mise-tools.sh.tmpl`: グローバル設定に固定されたmiseツールを導入するスクリプト
+- `run_onchange_after_25-install-mise-tools.sh.tmpl`: グローバル設定に指定されたmiseツールを導入するスクリプト
+- `run_onchange_after_27-retire-volta.sh.tmpl`: miseの代替コマンドを確認してVoltaを退避するスクリプト
 - `run_onchange_after_30-configure-git-hooks.sh.tmpl`: このリポジトリの Git hook を有効化するスクリプト
 - `.githooks/pre-commit`: ステージ済みファイルに対する Trivy secret scan
 - `.github/workflows/nix.yml`: macOS と Ubuntu でテンプレート展開、秘密情報検査、Flake 検査、miseツール解決、Home Manager ビルドを行う CI
@@ -31,7 +32,7 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 
 - Home Manager は CLI パッケージの導入に使う。zsh、Git、tmux などの設定ファイルを Home Manager から生成しない。
 - Nix は mise 自身、chezmoi、Git、ghq などの基盤 CLI を管理する。
-- mise は Node.js、pnpm、Bun、Python、uv、Granted など、バージョン固定やプロジェクト単位の切り替えが必要なツールを管理する。
+- mise は Node.js、pnpm、Bun、Python、uv、kubectl、Helm、Terraform、Granted など、バージョン固定やプロジェクト単位の切り替えが必要なツールを管理する。
 - 同じコマンドを Nix、mise、Homebrew の複数から導入しない。割り当ての詳細は `docs/tool-management.md` に従う。
 - Android SDK はリポジトリから導入せず、OS ごとのローカルインストール先を検出する。
 - マシン固有の設定や秘密情報はコミットしない。必要な設定は `~/.zshrc.local` または `~/.config/ghostty/local.config` に置く。
@@ -59,7 +60,7 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 ### Nix と依存更新
 
 - CLI パッケージは `dot_config/nix/home.nix` の `home.packages` に追加する。
-- mise 管理のツールは `dot_config/mise/config.toml` に正確なバージョンで追加し、Nix の `home.packages` には追加しない。
+- mise 管理のツールは `dot_config/mise/config.toml` に互換性を保つリリース系列で追加し、Nix の `home.packages` には追加しない。配布制約がある場合だけ理由を文書化して正確なバージョンに固定する。
 - unfree パッケージは必要なものだけ `allowUnfreePredicate` に列挙する。
 - `dot_config/nix/flake.lock` は手編集しない。`README.md` の一時 Flake を使う手順で更新する。
 - nixpkgs と Home Manager は同じ安定版系列にそろえる。

@@ -9,8 +9,8 @@
 
 | 管理ツール | 責務 | 主な対象 |
 | --- | --- | --- |
-| Nix / Home Manager | 端末を構成する基盤 CLI | mise、chezmoi、Git、ghq、AWS CLI、kubectl、Terraform、Trivy |
-| mise | バージョンを固定・切り替えたいランタイムと開発ツール | Node.js、pnpm、Bun、Python、uv、Granted、npm製CLI |
+| Nix / Home Manager | 端末を構成する基盤 CLI | mise、chezmoi、Git、ghq、AWS CLI、Trivy |
+| mise | バージョンを固定・切り替えたいランタイムと開発ツール | Node.js、kubectl、Helm、Terraform、Granted、npm製CLI |
 | chezmoi | ユーザー設定と各管理ツールをつなぐ設定 | zsh、mise設定、Ghostty、tmux、Emacs |
 | Homebrew | Nixで扱わないmacOS固有パッケージ | GUIアプリ、Homebrew Cask |
 
@@ -36,8 +36,10 @@
 - プロジェクトごとに異なるバージョンを使う可能性があるツール
 - リリース単位で明示的に更新したい開発用CLI
 
-グローバル既定値は `dot_config/mise/config.toml` で正確なバージョンに固定する。各プロジェクトは自身の `mise.toml` でグローバル既定値を上書きできる。
-バージョンを更新するときは設定変更後に `mise install` と動作確認を行い、古いバージョンの削除は別操作とする。
+グローバル既定値は `dot_config/mise/config.toml` で互換性を保つリリース系列に固定する。各プロジェクトは自身の `mise.toml` でグローバル既定値を上書きできる。0.xのツールはminor系列に固定し、対応プラットフォームの配布制約があるツールは正確なバージョンに固定する。
+初回導入と設定変更後は`mise install`を実行する。系列内の更新は`mise outdated`で確認してから`mise upgrade`を実行し、動作確認を行う。古いバージョンの削除は別操作とする。
+
+Yarnは`yarn`というツール名を維持しながら、`yarn`と`yarnpkg`を提供する`npm:@yarnpkg/cli-dist`バックエンドを使用する。
 
 ### chezmoi
 
@@ -52,8 +54,8 @@ GUIアプリやNixで扱わないmacOS固有パッケージに限定する。同
 
 | コマンド | 管理元 |
 | --- | --- |
-| `mise`, `chezmoi`, `git`, `ghq`, `aws`, `kubectl`, `helm`, `terraform`, `trivy` | Nix |
-| `node`, `pnpm`, `bun`, `python`, `uv`, `granted`, `assume`, `devcontainer`, `gemini` | mise |
+| `mise`, `chezmoi`, `git`, `ghq`, `aws`, `trivy` | Nix |
+| `node`, `npm`, `npx`, `pnpm`, `yarn`, `yarnpkg`, `bun`, `python`, `uv`, `granted`, `assume`, `devcontainer`, `gemini`, `kubectl`, `helm`, `terraform` | mise |
 
 Java 17は、現在はHome Managerのセッション変数と一体で管理しているためNixに残す。プロジェクトごとのJava切り替えが必要になった時点でmiseへの移行を別途検討する。
 
@@ -63,8 +65,9 @@ Java 17は、現在はHome Managerのセッション変数と一体で管理し�
 
 1. 設定ファイルをホームディレクトリへ展開する。
 2. `run_onchange_after_20-apply-home-manager.sh.tmpl`でHome Managerを適用し、miseとchezmoiを含む基盤CLIを導入する。
-3. `run_onchange_after_25-install-mise-tools.sh.tmpl`でmise設定に固定されたツールを導入する。
-4. `run_onchange_after_30-configure-git-hooks.sh.tmpl`でGit hookを設定する。
+3. `run_onchange_after_25-install-mise-tools.sh.tmpl`でmise設定に指定されたツールを導入する。
+4. `run_onchange_after_27-retire-volta.sh.tmpl`でmiseの代替コマンドを確認し、Voltaを退避する。
+5. `run_onchange_after_30-configure-git-hooks.sh.tmpl`でGit hookを設定する。
 
 Nixまたはmiseが未導入の場合、対応するスクリプトは再実行方法を表示して終了する。導入後にターミナルを再起動し、再度 `chezmoi apply` を実行する。
 
@@ -81,8 +84,10 @@ Granted本体はmiseで管理する。zshでは `alias assume='source assume'` �
 
 導入後は `granted --version` と `command -v assume assumego` を確認する。実際のロール引き受けは、利用者のAWSプロファイルとSSO設定を使って対話的に確認する。
 
+`fassume`は`aws configure list-profiles`の結果をfzfへ渡し、選択したプロファイルを`assume`で現在のシェルへ反映する。選択をキャンセルした場合は認証状態を変更しない。
+
 ## 移行とロールバック
 
-Voltaや個別インストールしたBunのディレクトリは自動削除しない。mise版のコマンドが利用できることを確認した後、PATH設定だけをchezmoiから外す。
+Voltaは、Node.js、npm、npx、pnpm、Yarn、devcontainer、Gemini CLIがmiseから解決できることを確認した後、`~/.volta.retired`へ退避する。退避先が既に存在する場合は上書きしない。`pnpx`は移行対象とせず、`pnpm dlx`を使用する。
 
-問題が起きた場合は、`dot_zshenv.d/remove_nodejs.zsh`を削除して元の`dot_zshenv.d/nodejs.zsh`を復元し、新しいシェルを開けば既存のVolta環境へ戻せる。miseで導入したツールの削除はロールバックとは分けて行う。
+問題が起きた場合は、`~/.volta.retired`を`~/.volta`へ戻し、`dot_zshenv.d/remove_nodejs.zsh`を一時的に外して以前のPATH設定を復元する。miseで導入したツールの削除はロールバックとは分けて行う。
