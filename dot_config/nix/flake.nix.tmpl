@@ -1,0 +1,43 @@
+{
+  description = "Portable Home Manager CLI environment";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+
+    home-manager = {
+      url = "github:nix-community/home-manager/release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { nixpkgs, home-manager, ... }:
+    let
+      system = {{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") }}"aarch64-darwin"{{ else if and (eq .chezmoi.os "linux") (eq .chezmoi.arch "amd64") }}"x86_64-linux"{{ else }}throw "Unsupported platform: {{ .chezmoi.os }}/{{ .chezmoi.arch }}"{{ end }};
+
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfreePredicate = pkg:
+          builtins.elem (nixpkgs.lib.getName pkg) [
+            "google-cloud-sdk"
+          ];
+      };
+
+      homeConfiguration = home-manager.lib.homeManagerConfiguration {
+        inherit pkgs;
+        modules = [
+          ./home.nix
+          {
+            home = {
+              username = {{ .chezmoi.username | toJson }};
+              homeDirectory = {{ .chezmoi.homeDir | toJson }};
+              stateVersion = "26.05";
+            };
+          }
+        ];
+      };
+    in
+    {
+      homeConfigurations.default = homeConfiguration;
+      checks.${system}.home = homeConfiguration.activationPackage;
+    };
+}

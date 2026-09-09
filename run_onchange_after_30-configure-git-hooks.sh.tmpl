@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# hook-hash={{ include ".githooks/pre-commit" | sha256sum }}
+# trivy-config-hash={{ include "trivy.yaml" | sha256sum }}
+# trivy-secret-config-hash={{ include "trivy-secret.yaml" | sha256sum }}
+
+set -eu
+
+source_dir={{ .chezmoi.sourceDir | quote }}
+
+if git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$source_dir" config core.hooksPath .githooks
+fi

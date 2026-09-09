@@ -1,0 +1,22 @@
+# ローカルにインストールされたAndroid SDKを利用する。
+{{- if eq .chezmoi.os "darwin" }}
+android_sdk="$HOME/Library/Android/sdk"
+{{- else if eq .chezmoi.os "linux" }}
+android_sdk="$HOME/Android/Sdk"
+{{- else }}
+android_sdk=""
+{{- end }}
+
+if [[ -n "$android_sdk" && -d "$android_sdk" ]]; then
+  export ANDROID_SDK_ROOT="$android_sdk"
+  for android_bin in \
+    "$ANDROID_SDK_ROOT/platform-tools" \
+    "$ANDROID_SDK_ROOT/emulator" \
+    "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin"; do
+    if [[ -d "$android_bin" ]]; then
+      export PATH="$android_bin:$PATH"
+    fi
+  done
+fi
+
+unset android_sdk android_bin

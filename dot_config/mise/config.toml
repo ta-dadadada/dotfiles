@@ -1,0 +1,16 @@
+[tool_alias]
+yarn = "npm:@yarnpkg/cli-dist"
+
+[tools]
+node = "24"
+pnpm = "10"
+bun = "1"
+python = "3.14"
+uv = "0.9"
+granted = "0.38.0"
+"npm:@devcontainers/cli" = "0.78"
+"npm:@google/gemini-cli" = "0.28"
+yarn = "4"
+kubectl = "1.37"
+helm = "4"
+terraform = "1.16"

@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# mise-available={{ ne (lookPath "mise") "" }}
+# mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
+
+set -eu
+
+if command -v mise >/dev/null 2>&1; then
+  mise_bin=$(command -v mise)
+elif [ -x "$HOME/.nix-profile/bin/mise" ]; then
+  mise_bin="$HOME/.nix-profile/bin/mise"
+else
+  echo "mise is not installed or is not available on PATH." >&2
+  echo "Apply Home Manager, then run: chezmoi apply" >&2
+  exit 0
+fi
+
+"$mise_bin" install --yes

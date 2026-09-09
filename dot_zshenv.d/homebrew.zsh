@@ -1,4 +1,4 @@
-# Homebrew PATH configuration
-
-# Homebrew PATH (Apple Silicon)
-export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+# HomebrewはNixで管理しないアプリケーションとパッケージに使用する。
+if command -v brew >/dev/null 2>&1; then
+  eval "$(brew shellenv)"
+fi

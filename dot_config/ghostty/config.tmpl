@@ -1,5 +1,5 @@
 # フォント設定
-font-family = "DejaVuSansMono Nerd Font"
+font-family = "DejaVu Sans Mono"
 font-size = 13
 
 # 行間の調整
@@ -8,6 +8,13 @@ adjust-cell-height = 10%
 # 背景の透過とブラー
 background-opacity = 0.95
 background-blur = true
+
+{{- if eq .chezmoi.os "darwin" }}
+# ランダム背景画像
+background-image = "{{ joinPath .chezmoi.homeDir ".config/ghostty/current_bg" }}"
+background-image-fit = cover
+background-image-opacity = 0.1
+{{- end }}
 
 # カーソル設定
 cursor-style = block

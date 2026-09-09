@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# mise-available={{ ne (lookPath "mise") "" }}
+# mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
+
+set -eu
+
+if [ ! -d "$HOME/.volta" ]; then
+  exit 0
+fi
+
+if command -v mise >/dev/null 2>&1; then
+  mise_bin=$(command -v mise)
+elif [ -x "$HOME/.nix-profile/bin/mise" ]; then
+  mise_bin="$HOME/.nix-profile/bin/mise"
+else
+  echo "Volta was not retired because mise is not installed." >&2
+  exit 0
+fi
+
+for command_name in node npm npx pnpm yarn yarnpkg devcontainer gemini; do
+  if ! "$mise_bin" which "$command_name" >/dev/null 2>&1; then
+    echo "Volta was not retired because mise does not provide: $command_name" >&2
+    exit 1
+  fi
+done
+
+retired_dir="$HOME/.volta.retired"
+if [ -e "$retired_dir" ]; then
+  echo "Volta was not retired because the destination already exists: $retired_dir" >&2
+  exit 1
+fi
+
+mv "$HOME/.volta" "$retired_dir"
+echo "Retired Volta to: $retired_dir"
