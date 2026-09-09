@@ -49,6 +49,17 @@ jobs:
         shell: bash
         run: nix flake check "$RUNNER_TEMP/home/.config/nix"
 
+      - name: Check mise tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/home"
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' dot_config/nix/flake.lock)
+          MISE_GLOBAL_CONFIG_FILE="$destination/.config/mise/config.toml" \
+          MISE_GLOBAL_CONFIG_ROOT="$destination" \
+          MISE_DATA_DIR="$RUNNER_TEMP/mise" \
+            nix run "github:NixOS/nixpkgs/$nixpkgs_rev#mise" -- install --dry-run
+
       - name: Build Home Manager activation package
         shell: bash
         run: nix build "$RUNNER_TEMP/home/.config/nix#homeConfigurations.default.activationPackage"

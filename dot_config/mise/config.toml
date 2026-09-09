@@ -1,0 +1,9 @@
+[tools]
+node = "24.14.0"
+pnpm = "10.12.4"
+bun = "1.4.2"
+python = "3.14.2"
+uv = "0.9.21"
+granted = "0.38.0"
+"npm:@devcontainers/cli" = "0.78.0"
+"npm:@google/gemini-cli" = "0.28.2"

@@ -4,6 +4,7 @@
   home.packages = with pkgs; [
     awscli2
     bat
+    chezmoi
     direnv
     eza
     fd
@@ -16,12 +17,12 @@
     jdk17
     kubectl
     kubernetes-helm
+    mise
     ripgrep
     starship
     terraform
     tmux
     trivy
-    uv
     zoxide
   ];
 
