@@ -84,7 +84,9 @@ Granted本体はmiseで管理する。zshでは `alias assume='source assume'` �
 
 導入後は `granted --version` と `command -v assume assumego` を確認する。実際のロール引き受けは、利用者のAWSプロファイルとSSO設定を使って対話的に確認する。
 
-`fassume`は`aws configure list-profiles`の結果をfzfへ渡し、選択したプロファイルを`assume`で現在のシェルへ反映する。選択をキャンセルした場合は認証状態を変更しない。
+`fassume [options]`は`aws configure list-profiles`の結果をfzfへ渡し、選択したプロファイルとオプションを`assume-shell`へ渡す。選択をキャンセルした場合は子シェルを開かず、認証状態を変更しない。
+
+`assume-shell [profile] [options]`はGranted組み込みの`--exec`で`env GRANTED_SUBSHELL=1 zsh -i`を実行するエイリアスで、`dot_zshenv.d/granted.zsh`で管理する。`fassume`の関数定義より先に読み込むことで、zshが関数定義時にエイリアスを展開できる。プロファイル省略時はGrantedの選択画面を使う。`exit`または`Ctrl-D`で終了しても、親シェルの認証情報は変わらない。子シェルでは`GRANTED_SUBSHELL=1`でtmuxの自動起動を抑止する。現在のシェルへ認証情報を反映したい場合や、`--exec`・`--console`など別の操作を行う場合は通常の`assume`を使用する。
 
 ## 移行とロールバック
 

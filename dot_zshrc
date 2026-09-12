@@ -20,6 +20,7 @@ if [[ -f "$HOME/.zshrc.local" ]]; then
 fi
 
 if [[ -o interactive ]] \
+  && [[ -z "${GRANTED_SUBSHELL:-}" ]] \
   && [[ -z "${TMUX:-}" ]] \
   && [[ -z "${CI:-}" ]] \
   && [[ -z "${SSH_CONNECTION:-}" ]] \

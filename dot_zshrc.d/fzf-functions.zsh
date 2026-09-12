@@ -84,16 +84,16 @@ pzkill() {
   [[ -n $pid ]] && kill -9 "$pid"
 }
 
-# fassume: AWSプロファイルを選択して現在のシェルへ反映する
+# fassume: AWSプロファイルを選択して認証済みの子シェルを開く
 fassume() {
   command -v aws >/dev/null 2>&1 || { echo "aws not found"; return 1; }
   command -v fzf >/dev/null 2>&1 || { echo "fzf not found"; return 1; }
-  command -v assume >/dev/null 2>&1 || { echo "assume not found"; return 1; }
+  command -v assumego >/dev/null 2>&1 || { echo "assumego not found"; return 1; }
 
   local profiles profile
   profiles=$(aws configure list-profiles) || return
   [[ -n "$profiles" ]] || { echo "no AWS profiles found"; return 1; }
 
   profile=$(printf '%s\n' "$profiles" | fzf --prompt="AWS profile❯ ") || return
-  [[ -n "$profile" ]] && assume "$profile"
+  [[ -n "$profile" ]] && assume-shell "$profile" "$@"
 }

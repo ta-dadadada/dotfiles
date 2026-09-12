@@ -160,7 +160,8 @@ Voltaからの移行時は、上記の代替コマンドをmiseで確認した�
 - `prc`: GitHub Pull Requestを選択してcheckoutする
 - `zfcd`: zoxideの履歴から移動する
 - `pzkill`: プロセスを選択して終了する
-- `fassume`: AWSプロファイルを選択し、Grantedで現在のシェルへ反映する
+- `fassume [options]`: AWSプロファイルをfzfで選択し、`assume-shell`で認証済みの子シェルを開く。例: `fassume --region ap-northeast-1`
+- `assume-shell [profile] [options]`: Grantedで認証した対話zshを子プロセスとして開く。プロファイル省略時はGrantedで選択し、`exit`または`Ctrl-D`で元のシェルへ戻る。例: `assume-shell development --region ap-northeast-1`
 - `shuffle_bg`: Ghosttyの背景画像をランダムに切り替える（macOSのみ）
 
 ## `.zshrc.local`からの移行
