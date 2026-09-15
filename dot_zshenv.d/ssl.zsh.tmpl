@@ -1,0 +1,27 @@
+# 企業プロキシのTLS傍受に対応するため、生成済みのCAバンドルを各ツールへ渡す。
+# バンドルはrun_onchange_after_15が生成する。未生成の環境では何もしない。
+# 非対話シェルのNIX_SSL_CERT_FILEを壊さないよう、exportは必ずガード内に置く。
+ssl_bundle="{{ joinPath .chezmoi.homeDir ".local/share/netskope/ca-bundle.crt" }}"
+
+if [[ -r "$ssl_bundle" ]]; then
+  export SSL_CERT_FILE="$ssl_bundle"
+  export CURL_CA_BUNDLE="$ssl_bundle"
+  export GIT_SSL_CAINFO="$ssl_bundle"
+  export REQUESTS_CA_BUNDLE="$ssl_bundle"
+  export PIP_CERT="$ssl_bundle"
+  export NODE_EXTRA_CA_CERTS="$ssl_bundle"
+  export AWS_CA_BUNDLE="$ssl_bundle"
+  export NIX_SSL_CERT_FILE="$ssl_bundle"
+  export CARGO_HTTP_CAINFO="$ssl_bundle"
+  export GRPC_DEFAULT_SSL_ROOTS_FILE_PATH="$ssl_bundle"
+
+  # Java用truststoreはパスのみ公開する。JAVA_TOOL_OPTIONSはバナーを出すため
+  # 既定では設定せず、必要な場合に~/.zshrc.localで設定する。
+  java_truststore="{{ joinPath .chezmoi.homeDir ".local/share/netskope/cacerts" }}"
+  if [[ -r "$java_truststore" ]]; then
+    export NETSKOPE_JAVA_TRUSTSTORE="$java_truststore"
+  fi
+  unset java_truststore
+fi
+
+unset ssl_bundle

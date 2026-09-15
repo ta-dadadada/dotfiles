@@ -19,6 +19,8 @@
 - `dot_zshenv`, `dot_zshenv.d/`: 環境変数と PATH。非対話シェルでも安全に読み込める内容にする
 - `dot_zshrc`, `dot_zshrc.d/`: 対話シェルの初期化、エイリアス、補助関数
 - `dot_config/ghostty/`, `dot_tmux.conf`, `dot_emacs`: 各アプリケーションの設定
+- `dot_local/bin/executable_ssl-doctor.tmpl`: 企業プロキシ環境の証明書設定を診断し、CA バンドルを再生成するコマンド
+- `run_onchange_after_15-build-ca-bundle.sh.tmpl`: 企業プロキシの CA を検出し、システム CA と結合したバンドルと Java truststore を生成するスクリプト
 - `run_onchange_after_20-apply-home-manager.sh.tmpl`: Home Manager の activation package をビルドして適用するスクリプト
 - `run_onchange_after_25-install-mise-tools.sh.tmpl`: グローバル設定に指定されたmiseツールを導入するスクリプト
 - `run_onchange_after_27-retire-volta.sh.tmpl`: miseの代替コマンドを確認してVoltaを退避するスクリプト
@@ -37,6 +39,7 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 - 同じコマンドを Nix、mise、Homebrew の複数から導入しない。割り当ての詳細は `docs/tool-management.md` に従う。
 - Android SDK はリポジトリから導入せず、OS ごとのローカルインストール先を検出する。
 - マシン固有の設定や秘密情報はコミットしない。必要な設定は `~/.zshrc.local` または `~/.config/ghostty/local.config` に置く。
+- 企業プロキシの CA 証明書はリポジトリに含めず、標準パスから検出する。検出できない環境では何も生成せず、環境変数も設定しない。
 - `home.stateVersion` は通常の依存更新では変更しない。
 
 この境界を変える必要がある場合は、実装だけでなく `README.md` の管理範囲とセットアップ手順も更新する。

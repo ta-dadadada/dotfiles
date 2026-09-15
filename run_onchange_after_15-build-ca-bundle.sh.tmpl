@@ -1,0 +1,175 @@
+#!/bin/sh
+
+# 企業プロキシ(Netskope)のTLS傍受用CAバンドルを生成する。
+# 証明書はリポジトリ外にあるためincludeでハッシュ化できない。
+# 代わりに各候補のサイズとmtimeを埋め込み、ローテーション時に再実行させる。
+
+# script-version=1
+# platform={{ .chezmoi.os }}/{{ .chezmoi.arch }}
+# home={{ .chezmoi.homeDir }}
+{{- $candidates := list }}
+{{- if eq .chezmoi.os "darwin" }}
+{{-   $candidates = list
+        "/Library/Application Support/Netskope/STAgent/data/nscacert_combined.pem"
+        "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
+        "/Library/Application Support/Netskope/STAgent/download/nscacert.pem"
+        "/Library/Application Support/Netskope/STAgent/data/nsdecrypt.pem"
+        "/Library/Application Support/Netskope/STAgent/data/ca.pem" }}
+{{- else if eq .chezmoi.os "linux" }}
+{{-   $candidates = list
+        "/opt/netskope/STAgent/data/nscacert_combined.pem"
+        "/opt/netskope/STAgent/data/nscacert.pem"
+        "/opt/netskope/STAgent/download/nscacert.pem"
+        "/opt/netskope/STAgent/data/nsdecrypt.pem" }}
+{{- end }}
+{{- range $candidates }}
+# candidate={{ . }} state={{ with stat . }}{{ .Size }}:{{ .ModTime }}{{ else }}absent{{ end }}
+{{- end }}
+
+set -eu
+
+bundle_dir={{ joinPath .chezmoi.homeDir ".local/share/netskope" | quote }}
+
+# 証明書を検出する。NETSKOPE_CA_CERTで任意のパスへ差し替えられる。
+netskope_cert="${NETSKOPE_CA_CERT:-}"
+if [ -z "$netskope_cert" ]; then
+  for candidate in \
+{{- range $candidates }}
+    {{ . | quote }} \
+{{- end }}
+    ; do
+    if [ -f "$candidate" ]; then
+      netskope_cert="$candidate"
+      break
+    fi
+  done
+fi
+
+# 未導入環境ではここで終了する。生成物もディレクトリも作らない。
+if [ -z "$netskope_cert" ] || [ ! -f "$netskope_cert" ]; then
+{{- if eq .chezmoi.os "darwin" }}
+  if [ -f "/Library/Application Support/Netskope/STAgent/data/nscacert.pem.enc" ]; then
+    echo "Netskope: the certificate is encrypted (encryptClientConfig)." >&2
+    echo "Netskope: export it from the keychain and set NETSKOPE_CA_CERT in ~/.zshrc.local." >&2
+  fi
+{{- end }}
+  exit 0
+fi
+
+# PEM形式であることを確認する。DERやゼロ長ファイルを取り込まない。
+if ! grep -q 'BEGIN CERTIFICATE' "$netskope_cert"; then
+  echo "Netskope: not a PEM certificate: $netskope_cert" >&2
+  exit 0
+fi
+
+# システムCAを基準にする。Netskope証明書だけでは通常の検証が壊れる。
+base_bundle=""
+for candidate in \
+  /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt \
+  /etc/ssl/cert.pem \
+  /etc/ssl/certs/ca-certificates.crt \
+  /etc/pki/tls/certs/ca-bundle.crt; do
+  if [ -f "$candidate" ]; then
+    base_bundle="$candidate"
+    break
+  fi
+done
+
+if [ -z "$base_bundle" ]; then
+  echo "Netskope: system CA bundle not found" >&2
+  exit 0
+fi
+
+mkdir -p "$bundle_dir"
+bundle="$bundle_dir/ca-bundle.crt"
+tmp="$bundle_dir/.ca-bundle.crt.$$"
+trap 'rm -f "$tmp"' EXIT
+
+# 結合済みバンドルが提供されていればそのまま使い、そうでなければ結合する。
+case "$netskope_cert" in
+  *nscacert_combined.pem)
+    cat "$netskope_cert" > "$tmp"
+    ;;
+  *)
+    cat "$base_bundle" > "$tmp"
+    printf '\n' >> "$tmp"
+    cat "$netskope_cert" >> "$tmp"
+    ;;
+esac
+
+# 切り詰められたバンドルは全TLSを壊すため、書き込み前に検証する。
+base_count=$(grep -c 'BEGIN CERTIFICATE' "$base_bundle")
+tmp_count=$(grep -c 'BEGIN CERTIFICATE' "$tmp")
+case "$netskope_cert" in
+  *nscacert_combined.pem)
+    # 結合済みバンドルは単独で十分な数を含むはず。
+    if [ "$tmp_count" -lt 2 ]; then
+      echo "Netskope: the combined bundle has too few certificates" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    if [ "$tmp_count" -le "$base_count" ]; then
+      echo "Netskope: the merged bundle is not larger than the base bundle" >&2
+      exit 1
+    fi
+    ;;
+esac
+
+# NETSKOPE_CA_FORCEが立っていれば比較を飛ばして必ず作り直す。
+if [ -n "${NETSKOPE_CA_FORCE:-}" ] || ! cmp -s "$tmp" "$bundle"; then
+  mv "$tmp" "$bundle"
+  chmod 644 "$bundle"
+  echo "Netskope: updated the CA bundle: $bundle"
+fi
+
+# JavaはNix Storeのcacertsを書き換えられないため、複製して取り込む。
+# JAVA_HOMEは実在しないパスを指す場合があるため信用しない。
+java_home=""
+for candidate in \
+  "${JAVA_HOME:-}" \
+  {{ joinPath .chezmoi.homeDir ".nix-profile" | quote }} \
+  /opt/homebrew/opt/openjdk \
+  /usr/local/opt/openjdk; do
+  if [ -n "$candidate" ] \
+    && [ -x "$candidate/bin/keytool" ] \
+    && [ -f "$candidate/lib/security/cacerts" ]; then
+    java_home="$candidate"
+    break
+  fi
+done
+
+if [ -n "$java_home" ]; then
+  truststore="$bundle_dir/cacerts"
+  tmp_store="$bundle_dir/.cacerts.$$"
+  rm -f "$tmp_store"
+  # 毎回ベースから複製する。差分importはローテーション時にalias衝突で失敗する。
+  cp "$java_home/lib/security/cacerts" "$tmp_store"
+  chmod u+w "$tmp_store"
+  if "$java_home/bin/keytool" -importcert \
+      -noprompt \
+      -trustcacerts \
+      -alias netskope-ca \
+      -file "$netskope_cert" \
+      -keystore "$tmp_store" \
+      -storepass changeit >/dev/null 2>&1; then
+    mv "$tmp_store" "$truststore"
+    chmod 644 "$truststore"
+    echo "Netskope: updated the Java truststore: $truststore"
+  else
+    rm -f "$tmp_store"
+    echo "Netskope: failed to import the CA into the Java truststore" >&2
+  fi
+fi
+
+# マルチユーザーモードではdaemonがソースを取得するため、環境変数が効かない。
+# root権限とホーム外の変更が必要なので自動化せず手順を案内する。
+if [ -f /etc/nix/nix.conf ] && ! grep -q '^ssl-cert-file' /etc/nix/nix.conf; then
+  echo "Netskope: nix-daemon needs a separate setting. Run these manually:" >&2
+  echo "  echo 'ssl-cert-file = $bundle' | sudo tee -a /etc/nix/nix.conf" >&2
+{{- if eq .chezmoi.os "darwin" }}
+  echo "  sudo launchctl kickstart -k system/org.nixos.nix-daemon" >&2
+{{- else }}
+  echo "  sudo systemctl restart nix-daemon" >&2
+{{- end }}
+fi
