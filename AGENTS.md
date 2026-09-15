@@ -24,6 +24,7 @@
 - `run_onchange_after_27-retire-volta.sh.tmpl`: miseの代替コマンドを確認してVoltaを退避するスクリプト
 - `run_onchange_after_30-configure-git-hooks.sh.tmpl`: このリポジトリの Git hook を有効化するスクリプト
 - `.githooks/pre-commit`: ステージ済みファイルに対する Trivy secret scan
+- `.githooks/pre-push`: push対象refに対する Trivy secret scan
 - `.github/workflows/nix.yml`: macOS と Ubuntu でテンプレート展開、秘密情報検査、Flake 検査、miseツール解決、Home Manager ビルドを行う CI
 
 chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。`.tmpl` は Go template であり、通常の設定ファイルとして扱わない。
@@ -74,7 +75,7 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 
 ```sh
 git diff --check
-shellcheck .githooks/pre-commit
+shellcheck .githooks/pre-commit .githooks/pre-push
 ```
 
 シェルファイルを変更した場合は、対象に応じて `sh -n` または `zsh -n` も実行する。テンプレートファイルはそのまま構文検査せず、展開後のファイルを検査する。

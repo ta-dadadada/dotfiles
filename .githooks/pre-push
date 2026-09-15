@@ -1,0 +1,41 @@
+#!/bin/sh
+
+set -eu
+
+if command -v trivy >/dev/null 2>&1; then
+  trivy_bin=$(command -v trivy)
+elif [ -x "$HOME/.nix-profile/bin/trivy" ]; then
+  trivy_bin="$HOME/.nix-profile/bin/trivy"
+else
+  echo "Trivyが見つかりません。Nix環境を適用してから再実行してください。" >&2
+  exit 1
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+push_dir=$(mktemp -d)
+trap 'rm -rf "$push_dir"' EXIT HUP INT TERM
+
+ref_count=0
+while read -r _local_ref local_oid _remote_ref _remote_oid; do
+  case "$local_oid" in
+    *[!0]*)
+      ;;
+    *)
+      continue
+      ;;
+  esac
+
+  ref_dir="$push_dir/ref-$ref_count"
+  mkdir "$ref_dir"
+
+  # push対象refの内容を一時ディレクトリへ展開して検査する。
+  git -C "$repo_root" archive --format=tar "$local_oid" |
+    tar -xf - -C "$ref_dir"
+  ref_count=$((ref_count + 1))
+done
+
+if [ "$ref_count" -eq 0 ]; then
+  exit 0
+fi
+
+"$trivy_bin" fs --config "$repo_root/trivy.yaml" "$push_dir"

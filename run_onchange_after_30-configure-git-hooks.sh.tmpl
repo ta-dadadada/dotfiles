@@ -1,6 +1,7 @@
 #!/bin/sh
 
-# hook-hash={{ include ".githooks/pre-commit" | sha256sum }}
+# pre-commit-hook-hash={{ include ".githooks/pre-commit" | sha256sum }}
+# pre-push-hook-hash={{ include ".githooks/pre-push" | sha256sum }}
 # trivy-config-hash={{ include "trivy.yaml" | sha256sum }}
 # trivy-secret-config-hash={{ include "trivy-secret.yaml" | sha256sum }}
 
