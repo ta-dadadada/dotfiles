@@ -23,7 +23,7 @@
         "/opt/netskope/STAgent/data/nsdecrypt.pem" }}
 {{- end }}
 {{- range $candidates }}
-# candidate={{ . }} state={{ with stat . }}{{ .Size }}:{{ .ModTime }}{{ else }}absent{{ end }}
+# candidate={{ . }} state={{ with stat . }}{{ .size }}:{{ .modTime }}{{ else }}absent{{ end }}
 {{- end }}
 
 set -eu
@@ -63,58 +63,81 @@ if ! grep -q 'BEGIN CERTIFICATE' "$netskope_cert"; then
 fi
 
 # システムCAを基準にする。Netskope証明書だけでは通常の検証が壊れる。
-base_bundle=""
+# 環境によって収録内容が異なるため、見つかったバンドルをすべて結合する。
+# 1つだけを選ぶと、そのバンドルに無いルートを信頼できなくなる。
+base_bundles=""
 for candidate in \
-  /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt \
   /etc/ssl/cert.pem \
   /etc/ssl/certs/ca-certificates.crt \
-  /etc/pki/tls/certs/ca-bundle.crt; do
+  /etc/pki/tls/certs/ca-bundle.crt \
+  /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt; do
   if [ -f "$candidate" ]; then
-    base_bundle="$candidate"
-    break
+    base_bundles="$base_bundles $candidate"
   fi
 done
 
-if [ -z "$base_bundle" ]; then
+if [ -z "$base_bundles" ]; then
   echo "Netskope: system CA bundle not found" >&2
   exit 0
 fi
 
 mkdir -p "$bundle_dir"
 bundle="$bundle_dir/ca-bundle.crt"
+work="$bundle_dir/.work.$$"
 tmp="$bundle_dir/.ca-bundle.crt.$$"
-trap 'rm -f "$tmp"' EXIT
+trap 'rm -rf "$work" "$tmp"' EXIT HUP INT TERM
+mkdir -p "$work"
 
-# 結合済みバンドルが提供されていればそのまま使い、そうでなければ結合する。
+# 証明書ごとに分割し、SHA-256フィンガープリントで重複を除いて連結する。
+# 同じルートが複数のバンドルに含まれるため、単純な連結では重複する。
+emit_unique() {
+  awk -v dir="$work/split" '
+    /BEGIN CERTIFICATE/ { n++; f = 1 }
+    f { print > (dir "." n ".pem") }
+    /END CERTIFICATE/ { f = 0 }
+  ' "$1"
+  for part in "$work"/split.*.pem; do
+    [ -f "$part" ] || continue
+    fp=$(openssl x509 -noout -fingerprint -sha256 -in "$part" 2>/dev/null || true)
+    if [ -n "$fp" ] && ! grep -qxF "$fp" "$work/seen" 2>/dev/null; then
+      printf '%s\n' "$fp" >> "$work/seen"
+      cat "$part" >> "$tmp"
+    fi
+    rm -f "$part"
+  done
+}
+
+: > "$tmp"
+: > "$work/seen"
+
+# 結合済みバンドルが提供されていればそれを最優先で取り込む。
 case "$netskope_cert" in
   *nscacert_combined.pem)
-    cat "$netskope_cert" > "$tmp"
+    emit_unique "$netskope_cert"
     ;;
   *)
-    cat "$base_bundle" > "$tmp"
-    printf '\n' >> "$tmp"
-    cat "$netskope_cert" >> "$tmp"
+    emit_unique "$netskope_cert"
+    for base in $base_bundles; do
+      emit_unique "$base"
+    done
     ;;
 esac
 
 # 切り詰められたバンドルは全TLSを壊すため、書き込み前に検証する。
-base_count=$(grep -c 'BEGIN CERTIFICATE' "$base_bundle")
+# 重複除去後もシステムの各バンドル以上の証明書を含むことを確認する。
 tmp_count=$(grep -c 'BEGIN CERTIFICATE' "$tmp")
-case "$netskope_cert" in
-  *nscacert_combined.pem)
-    # 結合済みバンドルは単独で十分な数を含むはず。
-    if [ "$tmp_count" -lt 2 ]; then
-      echo "Netskope: the combined bundle has too few certificates" >&2
-      exit 1
-    fi
-    ;;
-  *)
-    if [ "$tmp_count" -le "$base_count" ]; then
-      echo "Netskope: the merged bundle is not larger than the base bundle" >&2
-      exit 1
-    fi
-    ;;
-esac
+for base in $base_bundles; do
+  base_count=$(grep -c 'BEGIN CERTIFICATE' "$base")
+  if [ "$tmp_count" -lt "$base_count" ]; then
+    echo "Netskope: the merged bundle has fewer certificates than $base" >&2
+    exit 1
+  fi
+done
+
+if [ "$tmp_count" -lt 2 ]; then
+  echo "Netskope: the merged bundle has too few certificates" >&2
+  exit 1
+fi
 
 # NETSKOPE_CA_FORCEが立っていれば比較を飛ばして必ず作り直す。
 if [ -n "${NETSKOPE_CA_FORCE:-}" ] || ! cmp -s "$tmp" "$bundle"; then
