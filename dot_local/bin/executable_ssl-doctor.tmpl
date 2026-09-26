@@ -1,0 +1,364 @@
+#!/bin/sh
+#
+# ssl-doctor - 企業プロキシ(TLS傍受)環境の証明書設定を診断・再生成する。
+#
+#   ssl-doctor [diagnose]  現状を診断する。読み取り専用で副作用はない。
+#   ssl-doctor reset       CAバンドルを退避してから作り直し、再診断する。
+#   ssl-doctor path        生成済みバンドルのパスを表示する。
+
+set -eu
+
+bundle_dir={{ joinPath .chezmoi.homeDir ".local/share/netskope" | quote }}
+bundle="$bundle_dir/ca-bundle.crt"
+truststore="$bundle_dir/cacerts"
+probe_host="${SSL_DOCTOR_HOST:-www.google.com}"
+
+status=0
+
+ok()   { printf 'OK   %s\n' "$*"; }
+warn() { printf 'WARN %s\n' "$*"; }
+fail() { printf 'FAIL %s\n' "$*"; status=1; }
+note() { printf '     %s\n' "$*"; }
+head_() { printf '\n== %s ==\n' "$*"; }
+
+find_base_bundle() {
+  for candidate in \
+    /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt \
+    /etc/ssl/cert.pem \
+    /etc/ssl/certs/ca-certificates.crt \
+    /etc/pki/tls/certs/ca-bundle.crt; do
+    if [ -f "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# 1. 傍受の有無と発行者を確認する。原因の切り分けに最も効く。
+check_interception() {
+  head_ "TLS interception"
+
+  if ! command -v openssl >/dev/null 2>&1; then
+    warn "openssl is not available; skipping the interception check"
+    return
+  fi
+
+  issuer=$(echo \
+    | openssl s_client -connect "$probe_host:443" -servername "$probe_host" 2>/dev/null \
+    | openssl x509 -noout -issuer 2>/dev/null || true)
+
+  if [ -z "$issuer" ]; then
+    warn "could not reach $probe_host; the network may be down"
+    note "an offline machine cannot be diagnosed; re-run once connected"
+    return
+  fi
+
+  note "$issuer"
+  case "$issuer" in
+    *[Nn]etskope*)
+      ok "traffic is being intercepted; the Netskope CA must be trusted"
+      intercepted=yes
+      ;;
+    *)
+      ok "traffic is not being intercepted right now"
+      note "SSL errors here are probably unrelated to the corporate proxy"
+      intercepted=no
+      ;;
+  esac
+}
+
+# 2. バンドルの整合性と有効期限を確認する。ローテーション再発の直接原因。
+check_bundle() {
+  head_ "CA bundle"
+
+  if [ ! -r "$bundle" ]; then
+    if [ "${intercepted:-unknown}" = yes ]; then
+      fail "the bundle does not exist: $bundle"
+      note "run: ssl-doctor reset"
+    else
+      ok "the bundle does not exist (expected without the corporate proxy)"
+    fi
+    return
+  fi
+
+  count=$(grep -c 'BEGIN CERTIFICATE' "$bundle" 2>/dev/null || echo 0)
+  if [ "$count" -lt 2 ]; then
+    fail "the bundle looks truncated: $count certificate(s)"
+    note "run: ssl-doctor reset"
+    return
+  fi
+
+  base_bundle=$(find_base_bundle || true)
+  if [ -n "$base_bundle" ]; then
+    base_count=$(grep -c 'BEGIN CERTIFICATE' "$base_bundle" 2>/dev/null || echo 0)
+    if [ "$count" -lt "$base_count" ]; then
+      fail "the bundle has fewer certificates than the system bundle ($count < $base_count)"
+      note "run: ssl-doctor reset"
+      return
+    fi
+  fi
+
+  ok "$count certificates: $bundle"
+
+  # 期限切れ間近の証明書を数える。ローテーション忘れを検知する。
+  if command -v openssl >/dev/null 2>&1; then
+    # 診断は副作用を持たないため、一時ディレクトリで作業して必ず片付ける。
+    # bundle_dir配下に書くと中断時にゴミが残り、並行実行で競合する。
+    chk_dir=$(mktemp -d)
+    # shellcheck disable=SC2064
+    trap "rm -rf '$chk_dir'" EXIT HUP INT TERM
+
+    # システムCAに元から含まれる証明書は対象外にする。期限の近いルートは
+    # 常に一定数あり、企業CAのローテーション検知の妨げになる。
+    : > "$chk_dir/system"
+    for base in /etc/ssl/cert.pem /etc/ssl/certs/ca-certificates.crt \
+                /etc/pki/tls/certs/ca-bundle.crt \
+                /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt; do
+      [ -f "$base" ] || continue
+      awk -v d="$chk_dir/base" '/BEGIN CERTIFICATE/{n++;f=1}
+        f{print > (d "." n ".pem")}
+        /END CERTIFICATE/{f=0}' "$base" 2>/dev/null || true
+      for part in "$chk_dir"/base.*.pem; do
+        [ -f "$part" ] || continue
+        openssl x509 -noout -fingerprint -sha256 -in "$part" 2>/dev/null \
+          >> "$chk_dir/system" || true
+        rm -f "$part"
+      done
+    done
+
+    expiring=0
+    # バンドルを証明書単位に分割して30日以内の失効を調べる。
+    # BEGIN行より前のコメントを拾わないよう、証明書ブロックのみを書き出す。
+    awk -v d="$chk_dir/chk" '/BEGIN CERTIFICATE/{n++;f=1}
+      f{print > (d "." n ".pem")}
+      /END CERTIFICATE/{f=0}' "$bundle" 2>/dev/null || true
+    for chunk in "$chk_dir"/chk.*.pem; do
+      [ -f "$chunk" ] || continue
+      fp=$(openssl x509 -noout -fingerprint -sha256 -in "$chunk" 2>/dev/null || true)
+      if [ -n "$fp" ] && ! grep -qxF "$fp" "$chk_dir/system" 2>/dev/null; then
+        if ! openssl x509 -noout -checkend 2592000 -in "$chunk" >/dev/null 2>&1; then
+          expiring=$((expiring + 1))
+        fi
+      fi
+      rm -f "$chunk"
+    done
+
+    rm -rf "$chk_dir"
+    trap - EXIT HUP INT TERM
+
+    if [ "$expiring" -gt 0 ]; then
+      warn "$expiring corporate certificate(s) expire within 30 days"
+      note "if the corporate CA rotated, run: ssl-doctor reset"
+    else
+      ok "no corporate certificate expires within 30 days"
+    fi
+  fi
+
+  if [ -r "$truststore" ]; then
+    ok "the Java truststore exists: $truststore"
+  else
+    note "the Java truststore has not been generated (only needed for Java)"
+  fi
+}
+
+# 3. 環境変数とnix-daemonを確認する。
+#    「curlは通るのにnix buildだけ落ちる」典型例をここで気づける。
+check_env() {
+  head_ "Environment variables"
+
+  unset_vars=""
+  for var in SSL_CERT_FILE CURL_CA_BUNDLE GIT_SSL_CAINFO REQUESTS_CA_BUNDLE \
+             PIP_CERT NODE_EXTRA_CA_CERTS AWS_CA_BUNDLE NIX_SSL_CERT_FILE \
+             CARGO_HTTP_CAINFO GRPC_DEFAULT_SSL_ROOTS_FILE_PATH; do
+    eval "value=\${$var:-}"
+    if [ -z "$value" ]; then
+      unset_vars="$unset_vars $var"
+    elif [ "$value" != "$bundle" ]; then
+      # バンドル未使用時のNIX_SSL_CERT_FILEはNixの既定値であり異常ではない。
+      if [ -r "$bundle" ]; then
+        warn "$var points elsewhere: $value"
+      fi
+    fi
+  done
+
+  if [ -n "$unset_vars" ]; then
+    if [ -r "$bundle" ]; then
+      fail "the bundle exists but these are unset:$unset_vars"
+      note "start a new shell, or check ~/.zshenv.d/ssl.zsh"
+    else
+      ok "no certificate variables are set (expected without a bundle)"
+    fi
+  else
+    ok "all certificate variables point at the bundle"
+  fi
+
+  head_ "Nix daemon"
+  if [ ! -f /etc/nix/nix.conf ]; then
+    note "/etc/nix/nix.conf does not exist; Nix may not be installed"
+  elif grep -q '^ssl-cert-file' /etc/nix/nix.conf; then
+    ok "nix-daemon has ssl-cert-file configured"
+  elif [ -r "$bundle" ]; then
+    # daemonはrootで動き環境変数を継承しないため、ここが最も見落とされやすい。
+    fail "nix-daemon is not configured; source downloads will fail"
+    note "curl works but 'nix build' fails. Run these manually:"
+    note "  echo 'ssl-cert-file = $bundle' | sudo tee -a /etc/nix/nix.conf"
+{{- if eq .chezmoi.os "darwin" }}
+    note "  sudo launchctl kickstart -k system/org.nixos.nix-daemon"
+{{- else }}
+    note "  sudo systemctl restart nix-daemon"
+{{- end }}
+  else
+    ok "nix-daemon needs no change (no bundle in use)"
+  fi
+}
+
+# 4. 実接続を試し、どのツールが壊れているかを個別に判定する。
+check_tools() {
+  head_ "Connectivity"
+  url="https://$probe_host"
+
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fsS -o /dev/null --max-time 15 "$url" 2>/dev/null; then
+      ok "curl"
+    elif curl -fsS -o /dev/null --max-time 15 --insecure "$url" 2>/dev/null; then
+      fail "curl: certificate verification failed"
+      note "run: ssl-doctor reset"
+    else
+      warn "curl: could not connect (the network may be down)"
+    fi
+  fi
+
+  if command -v git >/dev/null 2>&1; then
+    if git ls-remote https://github.com/git/git HEAD >/dev/null 2>&1; then
+      ok "git"
+    else
+      fail "git: could not fetch over HTTPS"
+      note "check GIT_SSL_CAINFO, or run: ssl-doctor reset"
+    fi
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    if node -e "require('https').get('$url',r=>process.exit(0)).on('error',()=>process.exit(1))" \
+      >/dev/null 2>&1; then
+      ok "node"
+    else
+      fail "node: TLS connection failed"
+      note "check NODE_EXTRA_CA_CERTS, or run: ssl-doctor reset"
+    fi
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 -c "import urllib.request;urllib.request.urlopen('$url',timeout=15)" \
+      >/dev/null 2>&1; then
+      ok "python3"
+    else
+      fail "python3: TLS connection failed"
+      note "check SSL_CERT_FILE / REQUESTS_CA_BUNDLE, or run: ssl-doctor reset"
+    fi
+  fi
+}
+
+do_diagnose() {
+  check_interception
+  check_bundle
+  check_env
+  check_tools
+
+  head_ "Result"
+  if [ "$status" -eq 0 ]; then
+    echo "No problems found."
+  else
+    echo "Problems were found. Follow the steps above, or run: ssl-doctor reset"
+  fi
+  return "$status"
+}
+
+do_reset() {
+  head_ "Reset"
+
+  # 再生成に失敗しても壊れた状態で終わらせないよう、削除ではなく退避する。
+  backup=""
+  if [ -d "$bundle_dir" ]; then
+    backup="$bundle_dir.bak.$$"
+    mv "$bundle_dir" "$backup"
+    echo "Moved the existing bundle aside: $backup"
+  fi
+
+  if ! command -v chezmoi >/dev/null 2>&1; then
+    echo "chezmoi is not available on PATH." >&2
+    [ -n "$backup" ] && mv "$backup" "$bundle_dir"
+    exit 1
+  fi
+
+  echo "Rebuilding the CA bundle..."
+  # バンドルはスクリプト生成物でありchezmoiの管理対象ではないため、
+  # chezmoi applyでは対象にできない。生成スクリプトを直接展開して実行する。
+  # NETSKOPE_CA_FORCEで無条件に作り直し、chezmoiのstateは一切触らない。
+  # これによりHome Managerやmiseの再実行を巻き込まない。
+  script=$(mktemp)
+  render_err=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$script' '$render_err'" EXIT HUP INT TERM
+  # 展開エラーを握り潰すと原因が分からなくなるため、失敗時は内容を見せる。
+  if ! chezmoi execute-template \
+      < "$(chezmoi source-path)/run_onchange_after_15-build-ca-bundle.sh.tmpl" \
+      > "$script" 2>"$render_err"; then
+    echo "Failed to render the CA bundle script." >&2
+    sed 's/^/  /' "$render_err" >&2
+    [ -n "$backup" ] && mv "$backup" "$bundle_dir"
+    exit 1
+  fi
+  NETSKOPE_CA_FORCE=1 sh "$script" || true
+
+  # バンドルだけでなくtruststoreも確認する。生成スクリプトはkeytool失敗を
+  # 致命的として扱わないため、バンドル成功だけで退避を消すと
+  # 動作していたtruststoreを失う。
+  rebuilt=no
+  if [ -r "$bundle" ]; then
+    if [ -n "$backup" ] && [ -r "$backup/cacerts" ] && [ ! -r "$truststore" ]; then
+      cp "$backup/cacerts" "$truststore"
+      echo "Kept the previous Java truststore (the rebuild did not produce one)." >&2
+    fi
+    rebuilt=yes
+  fi
+
+  if [ "$rebuilt" = yes ]; then
+    echo "Rebuilt: $bundle"
+    [ -n "$backup" ] && rm -rf "$backup"
+  else
+    echo "Failed to rebuild the bundle." >&2
+    if [ -n "$backup" ]; then
+      rm -rf "$bundle_dir"
+      mv "$backup" "$bundle_dir"
+      echo "Restored the previous bundle." >&2
+    fi
+    echo "The corporate CA may not be installed on this machine." >&2
+    echo "If it lives at a non-standard path, set NETSKOPE_CA_CERT in ~/.zshrc.local." >&2
+    exit 1
+  fi
+
+  echo
+  echo "Open a new shell to pick up the updated variables."
+  do_diagnose
+}
+
+case "${1:-diagnose}" in
+  diagnose|"")
+    do_diagnose
+    ;;
+  reset)
+    do_reset
+    ;;
+  path)
+    printf '%s\n' "$bundle"
+    ;;
+  -h|--help|help)
+    sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    echo "unknown subcommand: $1" >&2
+    echo "usage: ssl-doctor [diagnose|reset|path]" >&2
+    exit 2
+    ;;
+esac

@@ -97,11 +97,73 @@ rm -rf "$tmpdir"
 
 GitHub Actionsはリリースタグに対応するコミットSHAで固定しています。Dependabotが毎週更新を確認し、SHAと同じ行にあるバージョンコメントも更新します。Nix入力はDependabotの対象外のため、上記の`flake.lock`更新手順で管理します。
 
+## 企業プロキシ (TLS傍受) 対応
+
+Netskopeなどの企業プロキシはTLSを傍受し、社内CAで再署名します。このCAを信頼しないCLIはSSL証明書の検証エラーで失敗します。
+
+`chezmoi apply`時に社内CAを標準パスから自動検出し、**システムCAと結合したバンドル**を`~/.local/share/netskope/ca-bundle.crt`へ生成します。Java用のtruststoreも同じディレクトリに作ります。`.zshenv.d/ssl.zsh`が`SSL_CERT_FILE`、`CURL_CA_BUNDLE`、`GIT_SSL_CAINFO`、`NODE_EXTRA_CA_CERTS`などへこのバンドルを渡します。
+
+社内CAを検出できない環境では何も生成せず、環境変数も設定しません。証明書はリポジトリにコミットしません。
+
+バンドルは検出できたシステムCA（macOSの`/etc/ssl/cert.pem`とNixのバンドルなど）をすべて結合し、フィンガープリントで重複を除いたうえで社内CAを加えます。いずれか1つだけを基準にすると、そのバンドルに収録されていないルートを信頼できなくなるためです。結果として既存のシステムルートの上位集合になり、VPN外やプロキシ無効時でも通常の証明書検証は壊れません。
+
+### nix-daemonの設定 (Nix利用時は必須)
+
+マルチユーザーモードのNixは、ソースの取得をrootで動作するdaemonが行うため、シェルの環境変数が効きません。`curl`は成功するのに`nix build`だけ失敗する形で現れます。root権限とホームディレクトリ外の変更が必要なため自動化していません。次を手動で実行します。
+
+```sh
+echo "ssl-cert-file = $HOME/.local/share/netskope/ca-bundle.crt" | sudo tee -a /etc/nix/nix.conf
+sudo launchctl kickstart -k system/org.nixos.nix-daemon
+```
+
+### SSLエラーが出たときは
+
+`ssl-doctor`で原因を切り分けます。傍受の有無、バンドルの整合性と有効期限、環境変数とnix-daemon、各ツールの実接続を診断します。読み取り専用で副作用はありません。
+
+```sh
+ssl-doctor          # 診断
+ssl-doctor reset    # バンドルを作り直して再診断
+```
+
+| 症状 | 対処 |
+| --- | --- |
+| プロキシ更新後にSSLエラー | `ssl-doctor`で原因を確認し、`ssl-doctor reset` |
+| `nix build`だけ失敗 | `ssl-doctor`が指摘するnix-daemonの手順を実行 |
+| 特定のツールだけ失敗 | `ssl-doctor`の接続テストで対象を特定 |
+| 元に戻したい | `rm -rf ~/.local/share/netskope`で無効化 (下記の注意を参照) |
+
+`ssl-doctor reset`は既存バンドルを退避してから作り直し、失敗時は書き戻します。証明書がローテーションされた場合は`chezmoi apply`でも再生成されます。
+
+`rm -rf ~/.local/share/netskope`による無効化は恒久的ではありません。社内CAがローテーションされると`chezmoi apply`が再生成を検知して作り直します。恒久的に止める場合は`~/.zshrc.local`で証明書変数を`unset`するか、社内CAを検出できない状態にします。
+
+### Java
+
+Nix Storeは読み取り専用でJDKの`cacerts`を変更できないため、複製した`~/.local/share/netskope/cacerts`を生成し、パスを`NETSKOPE_JAVA_TRUSTSTORE`で公開します。`JAVA_TOOL_OPTIONS`はJVM起動ごとにstderrへメッセージを出力し、出力を解析するスクリプトを壊すため既定では設定しません。必要な場合は`~/.zshrc.local`に追加します。
+
+```sh
+export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=$NETSKOPE_JAVA_TRUSTSTORE -Djavax.net.ssl.trustStorePassword=changeit"
+```
+
+GradleやMavenは`~/.gradle/gradle.properties`や`MAVEN_OPTS`で個別に指定します。
+
+### 証明書のパスとプロキシ変数
+
+社内CAが標準以外のパスにある場合や暗号化されている場合は、`~/.zshrc.local`で明示します。
+
+```sh
+export NETSKOPE_CA_CERT="$HOME/.config/certs/corp-ca.pem"
+```
+
+`HTTP_PROXY`などのプロキシ変数は設定しません。Netskopeは既定で透過的に動作し、明示設定はlocalhostや内部通信を壊すためです。必要な場合は`~/.zshrc.local`に置き、`NO_PROXY`へ`localhost,127.0.0.1,::1,.local`を含めます。
+
+`GIT_SSL_NO_VERIFY`、`NODE_TLS_REJECT_UNAUTHORIZED=0`、`PYTHONHTTPSVERIFY=0`は証明書検証自体を無効化するため使いません。
+
 ## 秘密情報の検査
 
-Trivyのsecret scannerをコミット前とGitHub Actionsで実行します。Home Managerの適用時に、このリポジトリの`core.hooksPath`が`.githooks`へ設定されます。
+Trivyのsecret scannerをコミット前、push前、GitHub Actionsで実行します。Home Managerの適用時に、このリポジトリの`core.hooksPath`が`.githooks`へ設定されます。
 
 pre-commit hookはGit indexを一時ディレクトリへ展開し、ステージ済みのコミット対象だけを検査します。検出時またはTrivy未導入時はコミットを中止します。
+pre-push hookはpush対象refの内容を一時ディレクトリへ展開して検査します。削除だけのpushでは検査を省略し、秘密情報の検出時またはTrivy未導入時はpushを中止します。
 
 リポジトリ全体を手動で検査する場合は次を実行します。
 
