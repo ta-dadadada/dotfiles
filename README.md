@@ -36,6 +36,8 @@ nix --extra-experimental-features 'nix-command flakes' \
   run 'nixpkgs#chezmoi' -- init --apply ta-dadadada
 ```
 
+Nixインストーラーが既存の`~/.zshenv`へ初期化処理を追加している場合、chezmoiから上書き確認が表示されます。管理下の`.zshenv.d/nix.zsh`がNixとHome Managerの初期化を引き継ぐため、上書きして構いません。
+
 すでにchezmoiを利用している環境では、Nix導入前に`chezmoi apply`を実行しても構いません。その場合、Nix設定は配置されますがHome Managerの適用は保留されます。Nix導入後にターミナルを再起動し、再度適用します。
 
 ```sh

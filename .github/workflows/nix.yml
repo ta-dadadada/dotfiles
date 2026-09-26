@@ -53,6 +53,16 @@ jobs:
           nix run "github:NixOS/nixpkgs/$nixpkgs_rev#zsh" -- \
             -n "$destination/.zshrc" "$destination/.zshrc.d/"*.zsh
 
+          test_home="$RUNNER_TEMP/zsh-test-home"
+          mkdir -p "$test_home/.nix-profile/etc/profile.d"
+          printf '%s\n' "export NIX_INIT_TEST=nix" \
+            > "$test_home/.nix-profile/etc/profile.d/nix.sh"
+          printf '%s\n' "export NIX_INIT_TEST=\"\${NIX_INIT_TEST}:home-manager\"" \
+            > "$test_home/.nix-profile/etc/profile.d/hm-session-vars.sh"
+          nix run "github:NixOS/nixpkgs/$nixpkgs_rev#zsh" -- \
+            -f -c "HOME=\"\$1\"; export HOME; . \"\$2\"; [[ \"\$NIX_INIT_TEST\" == nix:home-manager ]]" \
+            zsh "$test_home" "$destination/.zshenv.d/nix.zsh"
+
       - name: Check flake
         shell: bash
         run: nix flake check "$RUNNER_TEMP/home/.config/nix"
