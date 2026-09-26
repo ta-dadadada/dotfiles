@@ -45,6 +45,14 @@ jobs:
             --no-tty \
             apply --exclude scripts
 
+      - name: Check zsh syntax
+        shell: bash
+        run: |
+          destination="$RUNNER_TEMP/home"
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' dot_config/nix/flake.lock)
+          nix run "github:NixOS/nixpkgs/$nixpkgs_rev#zsh" -- \
+            -n "$destination/.zshrc" "$destination/.zshrc.d/"*.zsh
+
       - name: Check flake
         shell: bash
         run: nix flake check "$RUNNER_TEMP/home/.config/nix"

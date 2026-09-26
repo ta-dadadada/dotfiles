@@ -33,7 +33,7 @@ sh <(curl -L https://nixos.org/nix/install)
 
 ```sh
 nix --extra-experimental-features 'nix-command flakes' \
-  run nixpkgs#chezmoi -- init --apply ta-dadadada
+  run 'nixpkgs#chezmoi' -- init --apply ta-dadadada
 ```
 
 すでにchezmoiを利用している環境では、Nix導入前に`chezmoi apply`を実行しても構いません。その場合、Nix設定は配置されますがHome Managerの適用は保留されます。Nix導入後にターミナルを再起動し、再度適用します。
@@ -209,6 +209,7 @@ Voltaからの移行時は、上記の代替コマンドをmiseで確認した�
 
 ## 主なshell操作
 
+- `tmux`: 必要なときに手動でセッションを開始する。シェル起動時には自動起動しない
 - `ls`、`ll`、`la`: ezaによる一覧表示
 - `Ctrl-R`: fzfによる履歴検索
 - `Ctrl-T`: ファイル検索
