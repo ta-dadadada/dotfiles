@@ -23,7 +23,5 @@ if [[ -o interactive ]] \
   && [[ -z "${GRANTED_SUBSHELL:-}" ]] \
   && [[ -z "${TMUX:-}" ]] \
   && [[ -z "${CI:-}" ]] \
-  && [[ -z "${SSH_CONNECTION:-}" ]] \
-  && command -v tmux >/dev/null 2>&1; then
-  exec tmux
+  && [[ -z "${SSH_CONNECTION:-}" ]]
 fi
