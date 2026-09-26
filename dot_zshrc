@@ -18,10 +18,3 @@ fi
 if [[ -f "$HOME/.zshrc.local" ]]; then
     source "$HOME/.zshrc.local"
 fi
-
-if [[ -o interactive ]] \
-  && [[ -z "${GRANTED_SUBSHELL:-}" ]] \
-  && [[ -z "${TMUX:-}" ]] \
-  && [[ -z "${CI:-}" ]] \
-  && [[ -z "${SSH_CONNECTION:-}" ]]
-fi
