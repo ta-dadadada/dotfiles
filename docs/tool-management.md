@@ -59,6 +59,8 @@ GUIアプリやNixで扱わないmacOS固有パッケージに限定する。同
 
 Java 17は、現在はHome Managerのセッション変数と一体で管理しているためNixに残す。プロジェクトごとのJava切り替えが必要になった時点でmiseへの移行を別途検討する。
 
+Ubuntuでは`xterm-ghostty`を解釈できるよう、`ghostty.terminfo`のデータ出力だけをHome Managerで導入する。Ghostty本体は導入せず、macOSではHomebrewで導入したGhosttyアプリ同梱のterminfoを利用する。
+
 ## 適用順序
 
 `chezmoi apply`では次の順序で適用する。

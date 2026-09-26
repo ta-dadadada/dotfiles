@@ -36,6 +36,8 @@ nix --extra-experimental-features 'nix-command flakes' \
   run 'nixpkgs#chezmoi' -- init --apply ta-dadadada
 ```
 
+Nixインストーラーが既存の`~/.zshenv`へ初期化処理を追加している場合、chezmoiから上書き確認が表示されます。管理下の`.zshenv.d/nix.zsh`がNixとHome Managerの初期化を引き継ぐため、上書きして構いません。
+
 すでにchezmoiを利用している環境では、Nix導入前に`chezmoi apply`を実行しても構いません。その場合、Nix設定は配置されますがHome Managerの適用は保留されます。Nix導入後にターミナルを再起動し、再度適用します。
 
 ```sh
@@ -201,6 +203,8 @@ Voltaからの移行時は、上記の代替コマンドをmiseで確認した�
 ## zsh設定
 
 `~/.zshenv.d`は環境変数とPATH、`~/.zshrc.d`は対話シェルの設定を管理します。任意ツールの初期化はコマンドが存在する場合だけ行います。
+
+macOSではGhosttyアプリに同梱されたterminfoを利用します。UbuntuではHome ManagerがGhosttyのterminfoだけを導入して`TERMINFO_DIRS`へ追加するため、Ghosttyから接続したシェルでも`TERM=xterm-ghostty`のままtmuxを起動できます。Ghostty本体はUbuntuへ導入しません。
 
 マシン固有の設定はGit管理外の次のファイルへ記述します。
 
