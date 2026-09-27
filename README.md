@@ -54,6 +54,8 @@ chezmoi apply
 
 Node.js、pnpm、Bun、Python、uv、Granted、npm製CLI、Yarn、kubectl、Helm、Terraformはmiseで管理し、Nixとの二重管理を避けます。グローバル既定値は互換性を保つリリース系列で指定し、プロジェクト固有のバージョンは各リポジトリの`mise.toml`で上書きします。Grantedだけは対応プラットフォームに配布物がある正確なバージョンへ固定します。
 
+対話シェルでは`mise activate`、非対話シェルではmiseのshimsによってmise管理ツールを解決するため、エージェントが起動する非対話のzshからも`mise exec`なしで`node`や`terraform`などを実行できます。
+
 Android SDKはAndroid Studioなどでローカルに導入し、chezmoiがOS別の標準パスを検出して`ANDROID_SDK_ROOT`とPATHを設定します。
 
 ## 通常の更新

@@ -39,6 +39,8 @@
 グローバル既定値は `dot_config/mise/config.toml` で互換性を保つリリース系列に固定する。各プロジェクトは自身の `mise.toml` でグローバル既定値を上書きできる。0.xのツールはminor系列に固定し、対応プラットフォームの配布制約があるツールは正確なバージョンに固定する。
 初回導入と設定変更後は`mise install`を実行する。系列内の更新は`mise outdated`で確認してから`mise upgrade`を実行し、動作確認を行う。古いバージョンの削除は別操作とする。
 
+`dot_zshenv.d/tools.zsh`はmiseのshimsディレクトリをPATHの先頭へ追加し、エージェントや非対話シェルからも`mise exec`なしでmise管理ツールを実行できるようにする。shimsは実行時のディレクトリの`mise.toml`に従ってバージョンを選ぶ。対話シェルでは`dot_zshrc.d/tools.zsh`の`mise activate zsh`が各ツールの実体のパスをshimsより前に置く。
+
 Yarnは`yarn`というツール名を維持しながら、`yarn`と`yarnpkg`を提供する`npm:@yarnpkg/cli-dist`バックエンドを使用する。
 
 ### chezmoi
