@@ -206,6 +206,8 @@ Voltaからの移行時は、上記の代替コマンドをmiseで確認した�
 
 `~/.zshenv.d`は環境変数とPATH、`~/.zshrc.d`は対話シェルの設定を管理します。任意ツールの初期化はコマンドが存在する場合だけ行います。
 
+`~/.local/bin`は補助ファイル`~/.local/bin/env`の有無にかかわらずPATHの末尾に追加します。同名のコマンドがある場合は、miseやNixなど既存のPATH上のコマンドを優先します。
+
 macOSではGhosttyアプリに同梱されたterminfoを利用します。UbuntuではHome ManagerがGhosttyのterminfoだけを導入して`TERMINFO_DIRS`へ追加するため、Ghosttyから接続したシェルでも`TERM=xterm-ghostty`のままtmuxを起動できます。Ghostty本体はUbuntuへ導入しません。
 
 マシン固有の設定はGit管理外の次のファイルへ記述します。
