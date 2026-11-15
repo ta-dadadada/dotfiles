@@ -1,0 +1,17 @@
+# 必要な行だけを ~/.config/mise/config.local.toml へコピーする。
+# このファイル全体を有効化する必要はない。既存のローカル設定を上書きしない。
+[tools]
+node = "latest"
+pnpm = "latest"
+bun = "latest"
+python = "latest"
+uv = "latest"
+yarn = "latest"
+"npm:@devcontainers/cli" = "latest"
+"npm:@google/gemini-cli" = "latest"
+aws-cli = "latest"
+granted = "latest"
+kubectl = "latest"
+helm = "latest"
+terraform = "latest"
+java = "temurin"

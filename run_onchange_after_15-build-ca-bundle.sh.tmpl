@@ -1,10 +1,12 @@
 #!/bin/sh
+# mise-global-hash={{ include "scripts/mise-global.sh" | sha256sum }}
 
 # 企業プロキシ(Netskope)のTLS傍受用CAバンドルを生成する。
 # 証明書はリポジトリ外にあるためincludeでハッシュ化できない。
 # 代わりに各候補のサイズとmtimeを埋め込み、ローテーション時に再実行させる。
 
-# script-version=1
+# script-version=2
+# mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
 # platform={{ .chezmoi.os }}/{{ .chezmoi.arch }}
 # home={{ .chezmoi.homeDir }}
 {{- $candidates := list }}
@@ -69,8 +71,7 @@ base_bundles=""
 for candidate in \
   /etc/ssl/cert.pem \
   /etc/ssl/certs/ca-certificates.crt \
-  /etc/pki/tls/certs/ca-bundle.crt \
-  /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt; do
+  /etc/pki/tls/certs/ca-bundle.crt; do
   if [ -f "$candidate" ]; then
     base_bundles="$base_bundles $candidate"
   fi
@@ -146,12 +147,16 @@ if [ -n "${NETSKOPE_CA_FORCE:-}" ] || ! cmp -s "$tmp" "$bundle"; then
   echo "Netskope: updated the CA bundle: $bundle"
 fi
 
-# JavaはNix Storeのcacertsを書き換えられないため、複製して取り込む。
+# JDK本体を変更せず、Javaのcacertsを複製して社内CAを取り込む。
 # JAVA_HOMEは実在しないパスを指す場合があるため信用しない。
 java_home=""
+mise_java_home=""
+if command -v mise >/dev/null 2>&1; then
+  mise_java_home=$(sh {{ joinPath .chezmoi.sourceDir "scripts/mise-global.sh" | quote }} where java 2>/dev/null) || mise_java_home=""
+fi
 for candidate in \
+  "$mise_java_home" \
   "${JAVA_HOME:-}" \
-  {{ joinPath .chezmoi.homeDir ".nix-profile" | quote }} \
   /opt/homebrew/opt/openjdk \
   /usr/local/opt/openjdk; do
   if [ -n "$candidate" ] \
@@ -183,16 +188,4 @@ if [ -n "$java_home" ]; then
     rm -f "$tmp_store"
     echo "Netskope: failed to import the CA into the Java truststore" >&2
   fi
-fi
-
-# マルチユーザーモードではdaemonがソースを取得するため、環境変数が効かない。
-# root権限とホーム外の変更が必要なので自動化せず手順を案内する。
-if [ -f /etc/nix/nix.conf ] && ! grep -q '^ssl-cert-file' /etc/nix/nix.conf; then
-  echo "Netskope: nix-daemon needs a separate setting. Run these manually:" >&2
-  echo "  echo 'ssl-cert-file = $bundle' | sudo tee -a /etc/nix/nix.conf" >&2
-{{- if eq .chezmoi.os "darwin" }}
-  echo "  sudo launchctl kickstart -k system/org.nixos.nix-daemon" >&2
-{{- else }}
-  echo "  sudo systemctl restart nix-daemon" >&2
-{{- end }}
 fi

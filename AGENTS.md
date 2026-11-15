@@ -3,44 +3,52 @@
 ## プロジェクト概要
 
 このリポジトリは、chezmoi のソースディレクトリとして使う dotfiles 集である。
-基盤 CLI は Nix と Home Manager、バージョン管理対象のランタイムと開発ツールは mise、ユーザー設定は chezmoi、GUI アプリなどは Homebrew で管理する。
+macOSの基盤CLIはHomebrew、Ubuntuの基盤CLIはapt、共通CLIとランタイムはmise、ユーザー設定はchezmoiで管理する。NixとHome Managerは使用しない。
 
 対応環境は次の 2 種類に限定する。
 
-- Apple Silicon macOS (`darwin/arm64`, Nix では `aarch64-darwin`)
-- x86_64 Ubuntu (`linux/amd64`, Nix では `x86_64-linux`)
+- Apple Silicon macOS (`darwin/arm64`)
+- x86_64 Ubuntu (`linux/amd64`)
 
 変更前に `README.md` と対象ファイルを読む。リポジトリ内のファイルは chezmoi のソース状態であり、展開先のホームディレクトリを直接編集しない。
 
 ## 主要な構成
 
-- `dot_config/nix/`: Home Manager の Flake、パッケージ一覧、固定済み lock file
+- `.chezmoitemplates/packages/`: macOSのBrewfileとUbuntuのaptパッケージ一覧
+- `scripts/bootstrap.sh`: OSパッケージ、mise経由のchezmoi、設定適用の入口
+- `scripts/check-environment.sh`: 選択されたツールと端末設定の確認
+- `scripts/mise-global.sh`: プロジェクト設定を除き、共通・ローカル設定を結合してmiseを実行
+- `scripts/install-google-cloud.sh`: 必要なマシンでのみGoogle Cloud CLIを明示導入
+- `examples/mise/config.local.toml`: マシン固有設定の記入例
+- `scripts/verify.sh`: 両OSの一時展開とシェル・回帰テスト
+- `assets/terminfo/`: Ghostty terminfoのソースと配布元・ライセンス
 - `dot_config/mise/`: mise のグローバルツール設定
 - `dot_zshenv`, `dot_zshenv.d/`: 環境変数と PATH。非対話シェルでも安全に読み込める内容にする
 - `dot_zshrc`, `dot_zshrc.d/`: 対話シェルの初期化、エイリアス、補助関数
 - `dot_config/ghostty/`, `dot_tmux.conf`, `dot_emacs`: 各アプリケーションの設定
 - `dot_local/bin/executable_ssl-doctor.tmpl`: 企業プロキシ環境の証明書設定を診断し、CA バンドルを再生成するコマンド
 - `run_onchange_after_15-build-ca-bundle.sh.tmpl`: 企業プロキシの CA を検出し、システム CA と結合したバンドルと Java truststore を生成するスクリプト
-- `run_onchange_after_20-apply-home-manager.sh.tmpl`: Home Manager の activation package をビルドして適用するスクリプト
+- `run_onchange_after_20-install-terminfo.sh.tmpl`: UbuntuのGhostty terminfoをユーザー領域へ導入するスクリプト
+- `run_onchange_after_28-refresh-java-truststore.sh.tmpl`: mise導入後にJava truststoreを再確認するスクリプト
 - `run_onchange_after_25-install-mise-tools.sh.tmpl`: グローバル設定に指定されたmiseツールを導入するスクリプト
 - `run_onchange_after_27-retire-volta.sh.tmpl`: miseの代替コマンドを確認してVoltaを退避するスクリプト
 - `run_onchange_after_30-configure-git-hooks.sh.tmpl`: このリポジトリの Git hook を有効化するスクリプト
 - `.githooks/pre-commit`: ステージ済みファイルに対する Trivy secret scan
 - `.githooks/pre-push`: push対象refに対する Trivy secret scan
-- `.github/workflows/nix.yml`: macOS と Ubuntu でテンプレート展開、秘密情報検査、Flake 検査、miseツール解決、Home Manager ビルドを行う CI
+- `.github/workflows/environment.yml`: macOSとUbuntuでOSパッケージ・miseツールの導入、一時展開、シェル起動と秘密情報を検査するCI
 
 chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。`.tmpl` は Go template であり、通常の設定ファイルとして扱わない。
 
 ## 設計上の境界
 
-- Home Manager は CLI パッケージの導入に使う。zsh、Git、tmux などの設定ファイルを Home Manager から生成しない。
-- Nix は mise 自身、chezmoi、Git、ghq などの基盤 CLI を管理する。
-- mise は Node.js、pnpm、Bun、Python、uv、kubectl、Helm、Terraform、Granted など、バージョン固定やプロジェクト単位の切り替えが必要なツールを管理する。
-- 同じコマンドを Nix、mise、Homebrew の複数から導入しない。割り当ての詳細は `docs/tool-management.md` に従う。
+- OSの基盤はmacOSでHomebrew、Ubuntuでaptを使う。UbuntuへHomebrewを導入しない。
+- mise自身はOSパッケージから導入する。chezmoi、共通CLI、Java、ランタイムと開発ツールはmiseで管理する。
+- 同じコマンドの直接の管理元は一つにする。OSパッケージの依存として入るランタイムは強制削除せず、開発用コマンドはmiseを優先する。
+- `chezmoi apply`でsudoやOSパッケージの更新を実行しない。明示的なbootstrap操作に分ける。
+- 割り当ての詳細は `docs/tool-management.md`、既存環境の移行は `docs/migration-from-nix.md` に従う。
 - Android SDK はリポジトリから導入せず、OS ごとのローカルインストール先を検出する。
-- マシン固有の設定や秘密情報はコミットしない。必要な設定は `~/.zshrc.local` または `~/.config/ghostty/local.config` に置く。
+- マシン固有の設定や秘密情報はコミットしない。必要な設定は `~/.config/mise/config.local.toml`、`~/.zshrc.local`、`~/.config/ghostty/local.config` に置く。
 - 企業プロキシの CA 証明書はリポジトリに含めず、標準パスから検出する。検出できない環境では何も生成せず、環境変数も設定しない。
-- `home.stateVersion` は通常の依存更新では変更しない。
 
 この境界を変える必要がある場合は、実装だけでなく `README.md` の管理範囲とセットアップ手順も更新する。
 
@@ -50,7 +58,7 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 
 - OS 差分は `.chezmoi.os`、CPU 差分は `.chezmoi.arch` で明示する。
 - ユーザー名やホームディレクトリを固定値にしない。`.chezmoi.username`、`.chezmoi.homeDir`、`joinPath` を使う。
-- シェルへ値を埋め込むときは `quote`、Nix 文字列へ埋め込むときは `toJson` など、対象言語に合うエスケープを行う。
+- シェルへ値を埋め込むときは `quote`、その他の文字列も対象言語に合うエスケープを行う。
 - テンプレート変更後は、少なくとも現在のプラットフォームで展開結果を確認する。OS 分岐を変えた場合は CI の macOS と Ubuntu の両方を検証対象と考える。
 
 ### シェル設定とスクリプト
@@ -61,14 +69,13 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 - `run_onchange_after_*` の番号は適用順を表す。依存ファイルを変更したときに再実行されるよう、先頭のハッシュ用コメントも同期する。
 - 既存の日本語コメントは簡潔に保ち、処理の理由や管理境界が分かる場合だけ追加する。
 
-### Nix と依存更新
+### パッケージと依存更新
 
-- CLI パッケージは `dot_config/nix/home.nix` の `home.packages` に追加する。
-- mise 管理のツールは `dot_config/mise/config.toml` に互換性を保つリリース系列で追加し、Nix の `home.packages` には追加しない。配布制約がある場合だけ理由を文書化して正確なバージョンに固定する。
-- unfree パッケージは必要なものだけ `allowUnfreePredicate` に列挙する。
-- `dot_config/nix/flake.lock` は手編集しない。`README.md` の一時 Flake を使う手順で更新する。
-- nixpkgs と Home Manager は同じ安定版系列にそろえる。
-- GitHub Actions はリリースタグではなくコミット SHA で固定し、同じ行のバージョンコメントも更新する。
+- macOSの基盤CLIは `.chezmoitemplates/packages/Brewfile`、Ubuntuは `.chezmoitemplates/packages/ubuntu.txt` に追加する。
+- 共通CLIは `dot_config/mise/config.toml` に最小限だけ置き、原則 `latest` を使う。任意のランタイム・開発CLIは `~/.config/mise/config.local.toml` またはプロジェクトで選ぶ。Javaの最新版追従は `temurin` を使う。固定の例外には理由と解除条件を残す。
+- Ubuntuの基盤はmise公式リポジトリだけを追加し、Google公式は明示的な任意導入に分ける。追加する場合は専用の署名鍵で対象を限定する。
+- 古いツールやキャッシュの削除は更新と分ける。Nixの実環境への適用や撤去を検証に使わない。
+- GitHub ActionsはコミットSHAで固定し、同じ行のバージョンコメントも更新する。
 
 ## 検証
 
@@ -92,7 +99,7 @@ destination=$(mktemp -d)
 chezmoi --source "$PWD" --destination "$destination" --no-tty apply --exclude scripts
 ```
 
-展開結果の `.config/nix/flake.nix`、OS 条件付き設定、変更した dotfile を確認する。一時ディレクトリは確認後に削除してよい。
+展開結果のmise設定、OS条件付き設定、変更したdotfileを確認する。一時ディレクトリは確認後に削除してよい。
 
 ### 秘密情報検査
 
@@ -102,16 +109,15 @@ trivy fs --config trivy.yaml .
 
 Markdown も検査対象である。誤検知を除外するときは値を安易に許可せず、`trivy-secret.yaml` に理由が分かる限定的なルールを追加する。
 
-### Nix の完全確認
-
-テンプレートを一時ディレクトリへ展開した後、CI 相当の確認を行う。
+### 両OSの確認
 
 ```sh
-nix flake check "$destination/.config/nix"
-nix build "$destination/.config/nix#homeConfigurations.default.activationPackage"
+sh scripts/verify.sh
 ```
 
-ローカルに Nix または Trivy がない場合は、実行できなかった確認を明記し、GitHub Actions の macOS/Ubuntu 両ジョブで補完する。検証目的で `chezmoi apply` や Home Manager の activation を実環境へ適用しない。
+一時展開、展開後のShellCheckと構文検査、非対話シェルの回帰テスト、Ghostty terminfoを確認する。
+OSパッケージの実導入と共通CLIの起動はGitHub ActionsのmacOS/Ubuntu両ジョブで確認する。ローカルで実行できなかった検証は明記する。
+検証目的でbootstrapを実環境へ適用しない。別OSのテンプレート展開だけで実行確認済みとは扱わない。
 
 ## 変更時の注意
 

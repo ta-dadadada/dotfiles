@@ -1,0 +1,61 @@
+name: Environment
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  environment:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-26]
+        tools: [minimal, development]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare isolated machine settings
+        shell: bash
+        env:
+          TOOL_SET: ${{ matrix.tools }}
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/test-home/.config/mise"
+          mkdir -p "$config"
+          if [[ "$TOOL_SET" == development ]]; then
+            cp examples/mise/config.local.toml "$config/config.local.toml"
+          fi
+          {
+            echo "MISE_CONFIG_DIR=$config"
+            echo "MISE_TRUSTED_CONFIG_PATHS=$RUNNER_TEMP"
+            echo "MISE_DATA_DIR=$RUNNER_TEMP/mise"
+            echo "MISE_CACHE_DIR=$RUNNER_TEMP/mise-cache"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/mise/shims" >> "$GITHUB_PATH"
+
+      - name: Bootstrap selected machine
+        shell: bash
+        run: |
+          HOME="$RUNNER_TEMP/test-home" ZDOTDIR="$RUNNER_TEMP/test-home" sh scripts/bootstrap.sh
+          test -f "$RUNNER_TEMP/test-home/.zshenv"
+
+      - name: Verify templates and shell behavior
+        run: sh scripts/verify.sh
+
+      - name: Check noninteractive environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/test-home"
+          HOME="$destination" ZDOTDIR="$destination" zsh -c \
+            'sh "$1/scripts/check-environment.sh"' zsh "$GITHUB_WORKSPACE"
+          HOME="$destination" ZDOTDIR="$destination" TERM=xterm-256color zsh -i -c \
+            'command -v chezmoi ghq; fzf --zsh >/dev/null'
+
+      - name: Scan secrets
+        run: trivy fs --config trivy.yaml .

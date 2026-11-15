@@ -1,0 +1,20 @@
+# Ubuntu 24.04以降。開発ツールはmise、OSの基盤はaptで管理する。
+ca-certificates
+curl
+gnupg
+git
+zsh
+tmux
+jq
+ripgrep
+direnv
+gh
+eza
+zoxide
+coreutils
+file
+unzip
+xz-utils
+build-essential
+ncurses-bin
+shellcheck

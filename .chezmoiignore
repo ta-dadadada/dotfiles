@@ -9,3 +9,10 @@ LICENSE
 trivy-secret.yaml
 trivy.yaml
 .config/ghostty/local.config
+
+scripts
+tests
+assets
+.agent-goal.md
+.config/mise/config.local.toml
+examples

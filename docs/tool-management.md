@@ -1,99 +1,85 @@
 # ツール管理方針
 
-## 目的
-
-同じコマンドを複数のツールで導入すると、PATH の順序によって意図しないバージョンが選ばれる。
-この文書では、Nix、mise、chezmoi、Homebrew の責務を分離し、各ツールの管理元を一つに定める。
-
 ## 管理境界
 
-| 管理ツール | 責務 | 主な対象 |
+設定はchezmoi、バージョンをそろえる共通CLIとランタイムはmise、OSの基盤はmacOSでHomebrew、Ubuntuでaptを使う。NixとHome Managerは使わない。
+
+| 対象 | macOS | Ubuntu |
 | --- | --- | --- |
-| Nix / Home Manager | 端末を構成する基盤 CLI | mise、chezmoi、Git、ghq、AWS CLI、Trivy |
-| mise | バージョンを固定・切り替えたいランタイムと開発ツール | Node.js、kubectl、Helm、Terraform、Granted、npm製CLI |
-| chezmoi | ユーザー設定と各管理ツールをつなぐ設定 | zsh、mise設定、Ghostty、tmux、Emacs |
-| Homebrew | Nixで扱わないmacOS固有パッケージ | GUIアプリ、Homebrew Cask |
+| git、tmux、jq、rg、direnv、gh、eza、zoxide | Homebrew | apt |
+| mise本体 | Homebrew | mise公式aptリポジトリ |
+| chezmoi、ghq、fzf、bat、fd、starship、trivy（共通の必須CLI） | mise | mise |
+| AWS CLI、Java（マシンごとに選択） | mise | mise |
+| Node.js、pnpm、Bun、Python、uv、Yarn、Granted、kubectl、Helm、Terraform、npm製CLI（マシンごとに選択） | mise | mise |
+| Google Cloud CLI（任意） | Homebrew Cask `gcloud-cli` | Google公式apt `google-cloud-cli` |
+| Ghostty本体（任意） | Homebrew Cask | 導入しない |
+| Ghostty terminfo | アプリ同梱 | 同梱のソースをユーザー領域へコンパイル |
+| 設定・PATH・社内CA用補助スクリプト | chezmoi | chezmoi |
 
-一つのコマンドは一つの管理ツールだけから導入する。例外を設ける場合は、理由と優先するPATHをこの文書へ記録する。
+同じコマンドの直接の管理元は一つにする。Homebrewやaptが別パッケージの依存としてNode.jsやPython等を導入することはあるが、開発用のコマンドとバージョンはmiseから選択する。依存パッケージを強制削除しない。
 
-## 管理対象
+OS管理のツールはOSごとのバージョン差を許容する。差によって必要な機能が使えない場合は、両OS共通のmise管理へ移すことを検討する。新しいPPAや手書きのダウンローダーをツールごとに増やさない。
 
-### Nix / Home Manager
+## 唯一の一覧
 
-次の条件に当てはまるツールを管理する。
+- macOS: `.chezmoitemplates/packages/Brewfile`
+- Ubuntu: `.chezmoitemplates/packages/ubuntu.txt`。miseは `scripts/install-ubuntu.sh`、任意のGoogle Cloud CLIは `scripts/install-google-cloud.sh` で公式リポジトリから導入する。
+- 両OSの共通CLI: `dot_config/mise/config.toml`
+- マシン固有の追加・上書き: `~/.config/mise/config.local.toml`（Git管理外、chezmoi適用時も保持）
+- 任意ツールの記入例: `examples/mise/config.local.toml`
 
-- ログイン直後から利用する基盤CLI
-- プロジェクトごとのバージョン切り替えが不要なCLI
-- mise自身やchezmoiなど、環境を構成するためのブートストラップ用CLI
+共通設定はシェル操作とdotfiles管理に必要な7種類に絞る。ランタイム、言語ごとのパッケージマネージャー、クラウド・インフラ・npm製CLIは、マシンまたはプロジェクト側で選ぶ。
+グローバルは原則 `latest`、Javaはベンダーを明示した `temurin` とする。プロジェクトの再現性は各リポジトリの `mise.toml` で固定する。具体的な不具合や配布制約による例外には、理由と解除条件をコメントする。共通のlockfileで全マシンの更新を止めない。
+fzfは `fzf --zsh` を利用するため、古いUbuntuパッケージに依存させない。batとfdはUbuntuの別コマンド名を設定全体に持ち込まないためmiseにそろえる。
 
-`dot_config/nix/home.nix` を唯一のパッケージ一覧とする。`home.stateVersion`は依存更新に合わせて変更しない。
+mise自身はOSパッケージとして導入し、自分自身では管理しない。chezmoiはmiseで導入する。初回のchezmoi取得だけcheckoutの設定で隔離する。実際のapplyへ隔離用の環境変数を持ち込まず、配置後の共通設定と既存のローカル設定を結合する。
 
-### mise
+## セットアップと適用順
 
-次の条件に当てはまるツールを管理する。
+明示的な `sh scripts/bootstrap.sh` で次を行う。
 
-- 言語ランタイムとパッケージマネージャー
-- プロジェクトごとに異なるバージョンを使う可能性があるツール
-- リリース単位で明示的に更新したい開発用CLI
+1. 対応OS/CPUを検査し、基盤パッケージを導入する。Ubuntuはsudoを使う。
+2. checkoutの設定を使ってmiseでchezmoiを導入する。
+3. そのchezmoiで同じcheckoutを適用する。
 
-グローバル既定値は `dot_config/mise/config.toml` で互換性を保つリリース系列に固定する。各プロジェクトは自身の `mise.toml` でグローバル既定値を上書きできる。0.xのツールはminor系列に固定し、対応プラットフォームの配布制約があるツールは正確なバージョンに固定する。
-初回導入と設定変更後は`mise install`を実行する。系列内の更新は`mise outdated`で確認してから`mise upgrade`を実行し、動作確認を行う。古いバージョンの削除は別操作とする。
+`chezmoi apply` は次を行う。Homebrewやaptの操作は含めない。
 
-`dot_zshenv.d/tools.zsh`はmiseのshimsディレクトリをPATHの先頭へ追加し、エージェントや非対話シェルからも`mise exec`なしでmise管理ツールを実行できるようにする。shimsは実行時のディレクトリの`mise.toml`に従ってバージョンを選ぶ。対話シェルでは`dot_zshrc.d/tools.zsh`の`mise activate zsh`が各ツールの実体のパスをshimsより前に置く。
+1. 設定ファイルを展開する。
+2. 社内CAを検出した場合だけ、OSのCAと結合したバンドルを生成する。
+3. UbuntuのGhostty terminfoを `~/.local/share/terminfo` へ導入する。
+4. 共通とマシン固有のmise設定を信頼済みに登録し、有効なグローバルのツールを導入する。
+5. 旧Voltaがあり代替コマンドがすべてそろう場合だけ、`~/.volta.retired` へ退避する。不足時は退避せず続行する。
+6. Javaを利用するマシンでは、JDK導入後にtruststoreの生成を再確認する。
+7. リポジトリのGit hookを設定する。
 
-Yarnは`yarn`というツール名を維持しながら、`yarn`と`yarnpkg`を提供する`npm:@yarnpkg/cli-dist`バックエンドを使用する。
+OSパッケージの追加だけなら `sh scripts/bootstrap.sh --base-only` を実行する。macOSでは既存パッケージを一括upgradeせず、Brewfileの不足分を導入する。Ubuntuの `apt-get install` は指定パッケージを更新することがあるが、全体のupgradeは行わない。
 
-### chezmoi
+## マシン固有設定の扱い
 
-設定ファイルだけを管理し、CLI本体や言語ランタイムの配布元にはしない。
-マシン固有設定と秘密情報は、リポジトリ外のローカル設定へ置く。
+`config.local.toml` は標準の上書きファイルとして読み込む。共通設定にないツールの追加、同じツールの版の上書き、明示的な `disable_tools` を尊重する。無効化はプロジェクト側にも及ぶため、任意ツールは共通設定へ入れて無効化するより、必要なマシンだけに追加する。
+追加例、編集・導入・更新操作は [README](../README.md#マシンごとのツール選択) を参照する。
 
-### Homebrew
+`scripts/mise-global.sh` は中立な一時ディレクトリからmiseを呼び、作業中のプロジェクト設定だけを除外する。導入と環境確認は同じ読み込み規則を使う。`MISE_GLOBAL_CONFIG_FILE` で共通設定だけを強制するとローカル設定を読まなくなるため、通常運用では設定しない。
+`run_onchange` はローカル設定の内容ハッシュも含み、変更後のapplyで再実行する。ファイル自体の内容はスクリプトへ埋め込まない。
 
-GUIアプリやNixで扱わないmacOS固有パッケージに限定する。同名のCLIをNixまたはmiseでも導入しない。
+環境確認はOSの基盤に加え、有効なmise設定の導入状態を調べる。JavaやAWS CLIなど未選択のツールは要求せず、Google Cloud CLIは既に存在する場合だけ起動を検査する。新しい任意ツールをローカル設定へ追加しても、導入状態の確認に別の必須一覧を追加する必要はない。
 
-## 現在の割り当て
+## シェルと環境変数
 
-| コマンド | 管理元 |
-| --- | --- |
-| `mise`, `chezmoi`, `git`, `ghq`, `aws`, `trivy` | Nix |
-| `node`, `npm`, `npx`, `pnpm`, `yarn`, `yarnpkg`, `bun`, `python`, `uv`, `granted`, `assume`, `devcontainer`, `gemini`, `kubectl`, `helm`, `terraform` | mise |
+`dot_zshenv.d/homebrew.zsh` はApple Silicon Macの標準パスからHomebrewを初期化する。UbuntuではHomebrewを読み込まない。
+`dot_zshenv.d/tools.zsh` はmiseのshimsをPATHへ追加し、`~/.local/bin`は末尾へ置く。対話シェルでは `dot_zshrc.d/tools.zsh` がmiseをactivateする。
+`dot_zshenv.d/runtime.zsh` は選択中のJavaから `JAVA_HOME` を設定し、ユーザー領域のterminfoを参照する。
 
-Java 17は、現在はHome Managerのセッション変数と一体で管理しているためNixに残す。プロジェクトごとのJava切り替えが必要になった時点でmiseへの移行を別途検討する。
+`dot_zshenv.d/nix.zsh` は旧管理ファイルを上書きするため残す。NixやHome Managerの初期化を行わず、親プロセスやシステム設定から継承したNixのPATH、Nixの `JAVA_HOME` と証明書変数を除く。`dot_zshrc`でも再度除き、システム初期化で再追加されるPATHに対応する。Nixを必要とする別プロジェクトがある場合は、撤去前にその依存を確認する。
 
-Ubuntuでは`xterm-ghostty`を解釈できるよう、`ghostty.terminfo`のデータ出力だけをHome Managerで導入する。Ghostty本体は導入せず、macOSではHomebrewで導入したGhosttyアプリ同梱のterminfoを利用する。
+## GrantedとVolta
 
-## 適用順序
+Grantedは任意のローカル設定で `latest` を指定する。0.40.0でmacOS配布物が復帰しており、過去の配布制約による0.38.0固定は解除する。両OSで配布・起動をCI確認し、実際のSSOとKeychainは利用者が確認する。
+`assume`のsource用エイリアス、`assume-shell`、`fassume`は維持する。AWS設定や認証情報は管理しない。実際のSSO・ロール引き受けは利用者が対話的に確認する。
 
-`chezmoi apply`では次の順序で適用する。
+旧Voltaの退避先は自動削除しない。戻す場合は `~/.volta.retired` を `~/.volta` へ戻し、`dot_zshenv.d/remove_nodejs.zsh` とPATHの変更を確認する。miseの削除は別操作とする。
 
-1. 設定ファイルをホームディレクトリへ展開する。
-2. `run_onchange_after_20-apply-home-manager.sh.tmpl`でHome Managerを適用し、miseとchezmoiを含む基盤CLIを導入する。
-3. `run_onchange_after_25-install-mise-tools.sh.tmpl`でmise設定に指定されたツールを導入する。
-4. `run_onchange_after_27-retire-volta.sh.tmpl`でmiseの代替コマンドを確認し、Voltaを退避する。
-5. `run_onchange_after_30-configure-git-hooks.sh.tmpl`でGit hookを設定する。
+## 更新・撤去
 
-Nixまたはmiseが未導入の場合、対応するスクリプトは再実行方法を表示して終了する。導入後にターミナルを再起動し、再度 `chezmoi apply` を実行する。
-
-## Granted
-
-Granted本体はmiseで管理する。zshでは `alias assume='source assume'` が必要なため、`dot_zshenv.d/granted.zsh`で管理する。
-バージョン0.39.0にはmacOS用の配布物がないため、macOSとLinuxの両方を同じ設定で扱える0.38.0に固定する。将来更新するときは、両方の対応環境で配布物が提供されていることを確認する。
-
-次のファイルは個人設定や認証情報を含むため管理しない。
-
-- `~/.aws/config`
-- `~/.aws/credentials`
-- `~/.granted/`
-
-導入後は `granted --version` と `command -v assume assumego` を確認する。実際のロール引き受けは、利用者のAWSプロファイルとSSO設定を使って対話的に確認する。
-
-`fassume [options]`は`aws configure list-profiles`の結果をfzfへ渡し、選択したプロファイルとオプションを`assume-shell`へ渡す。選択をキャンセルした場合は子シェルを開かず、認証状態を変更しない。
-
-`assume-shell [profile] [options]`はGranted組み込みの`--exec`で`env GRANTED_SUBSHELL=1 zsh -i`を実行するエイリアスで、`dot_zshenv.d/granted.zsh`で管理する。`fassume`の関数定義より先に読み込むことで、zshが関数定義時にエイリアスを展開できる。プロファイル省略時はGrantedの選択画面を使う。`exit`または`Ctrl-D`で終了しても、親シェルの認証情報は変わらない。子シェルでは`GRANTED_SUBSHELL=1`でtmuxの自動起動を抑止する。現在のシェルへ認証情報を反映したい場合や、`--exec`・`--console`など別の操作を行う場合は通常の`assume`を使用する。
-
-## 移行とロールバック
-
-Voltaは、Node.js、npm、npx、pnpm、Yarn、devcontainer、Gemini CLIがmiseから解決できることを確認した後、`~/.volta.retired`へ退避する。退避先が既に存在する場合は上書きしない。`pnpx`は移行対象とせず、`pnpm dlx`を使用する。
-
-問題が起きた場合は、`~/.volta.retired`を`~/.volta`へ戻し、`dot_zshenv.d/remove_nodejs.zsh`を一時的に外して以前のPATH設定を復元する。miseで導入したツールの削除はロールバックとは分けて行う。
+miseの最新版追従は `scripts/mise-global.sh outdated` と `scripts/mise-global.sh upgrade --no-prune`、OSの基盤更新はbrew/aptで行う。更新と古いバージョン・キャッシュの削除は分ける。
+Nix環境からの段階移行、旧パッケージの整理、復旧方法は [移行手順](migration-from-nix.md) を参照する。

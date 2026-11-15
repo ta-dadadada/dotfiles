@@ -1,9 +1,9 @@
-# 単一ユーザーインストールのNixを初期化する。
-if [[ -r "$HOME/.nix-profile/etc/profile.d/nix.sh" ]]; then
-  . "$HOME/.nix-profile/etc/profile.d/nix.sh"
+# 移行前の親シェルやシステム初期化から引き継いだNixのPATHを除く。
+# 旧ファイルを上書きするため名前を維持する。Nix本体やプロファイルは削除しない。
+path=("${(@)path:#/nix/*}")
+path=("${(@)path:#$HOME/.nix-profile/bin}")
+path=("${(@)path:#$HOME/.local/state/nix/profiles/*/bin}")
+if [[ "${JAVA_HOME:-}" == /nix/* ]]; then
+  unset JAVA_HOME
 fi
-
-# スタンドアロンHome Managerが生成した環境変数を読み込む。
-if [[ -r "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" ]]; then
-  . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh"
-fi
+unset NIX_SSL_CERT_FILE

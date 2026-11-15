@@ -1,219 +1,174 @@
 # dotfiles
 
-CLI環境をNix、Home Manager、mise、個人設定をchezmoiで管理するdotfilesです。
-
-## 管理範囲
-
-| 管理ツール | 対象 |
-| --- | --- |
-| Nix / Home Manager | 基盤CLI、クラウドCLI、mise、chezmoi |
-| mise | ランタイム、バージョン切り替え対象のCLI、Granted、npm製CLI |
-| chezmoi | zsh、mise、tmux、Ghostty、Emacsなどの個人設定 |
-| Homebrew | macOSのGUIアプリとNixで扱わないパッケージ |
-
-Home Managerはパッケージの導入だけに使用します。zsh、Git、tmuxなどの設定ファイルはHome Managerで生成しません。
-詳しい責務分担と移行・ロールバック方法は[ツール管理方針](docs/tool-management.md)を参照してください。
+macOSの基盤CLIはHomebrew、Ubuntuの基盤CLIはapt、共通の開発ツールはmise、個人設定はchezmoiで管理するdotfilesです。NixとHome Managerは使用しません。
 
 ## 対応環境
 
-- Apple Silicon Mac (`aarch64-darwin`)
-- Ubuntu x86_64 (`x86_64-linux`)
+- Apple Silicon macOS (`darwin/arm64`)
+- x86_64 Ubuntu（セットアップ対象: 24.04 / 26.04、CI検証: 24.04）
 
-ユーザー名とホームディレクトリはchezmoiがセットアップ対象から検出します。固定のユーザー名や標準ホームディレクトリは前提にしません。
+ユーザー名とホームディレクトリはchezmoiが検出します。固定の個人パスは使用しません。
+
+## 管理範囲
+
+| 管理元 | 対象 |
+| --- | --- |
+| Homebrew / apt | Git、tmux、jq、ripgrep、direnv、gh、eza、zoxide、mise、OSの補助ツール |
+| mise（共通の必須CLI） | chezmoi、ghq、fzf、bat、fd、starship、Trivy。すべて `latest` |
+| mise（マシンごとの任意CLI） | ランタイム、Java、AWS CLI、Granted、kubectl、Helm、Terraform、npm製CLI |
+| Homebrew Cask / Google公式apt（任意） | Google Cloud CLI |
+| Homebrew Cask（macOS・任意） | GhosttyなどのGUIアプリは必要なマシンへ個別導入 |
+| chezmoi | zsh、mise、tmux、Ghostty、Emacsなどのユーザー設定 |
+
+詳細は[ツール管理方針](docs/tool-management.md)を参照してください。
+**既存のNix環境から更新する場合は、先に[移行手順](docs/migration-from-nix.md)を読んでください。**
 
 ## 初回セットアップ
 
-最初に[Nix公式手順](https://nixos.org/download/)でNixを導入します。
+macOSはXcode Command Line Toolsと[Homebrew](https://brew.sh)を先に導入します。Ubuntuはgit、sudoが必要です。UbuntuへHomebrewは導入しません。
 
 ```sh
-sh <(curl -L https://nixos.org/nix/install)
+git clone https://github.com/ta-dadadada/dotfiles.git "$HOME/.local/share/chezmoi"
+cd "$HOME/.local/share/chezmoi"
+sh scripts/bootstrap.sh
 ```
 
-ターミナルを再起動してから、chezmoiを初期化します。
+上のclone先が既に存在する場合は、そのcheckoutで実行します。リポジトリURLは実際の取得元に合わせてください。
+`bootstrap.sh`はOSのパッケージ、mise経由のchezmoi、設定の適用、共通CLIの順に導入します。Ubuntuではapt用にsudoを使います。既存のmiseやNix版chezmoiには依存しません。
+
+設定適用時に上書き確認が出た場合は、ローカル変更を確認してから進めてください。Java、言語ランタイム、クラウドCLI、GUIアプリは自動導入しません。既存のマシン固有設定があれば、初回の適用から尊重します。
+
+ターミナルを開き直して確認します。
 
 ```sh
-nix --extra-experimental-features 'nix-command flakes' \
-  run 'nixpkgs#chezmoi' -- init --apply ta-dadadada
+cd "$(chezmoi source-path)"
+sh scripts/check-environment.sh
 ```
 
-Nixインストーラーが既存の`~/.zshenv`へ初期化処理を追加している場合、chezmoiから上書き確認が表示されます。管理下の`.zshenv.d/nix.zsh`がNixとHome Managerの初期化を引き継ぐため、上書きして構いません。
+AWS/GCPのログインやロール引き受けは行いません。必要に応じて利用者自身で確認します。
 
-すでにchezmoiを利用している環境では、Nix導入前に`chezmoi apply`を実行しても構いません。その場合、Nix設定は配置されますがHome Managerの適用は保留されます。Nix導入後にターミナルを再起動し、再度適用します。
+## マシンごとのツール選択
+
+共通の `~/.config/mise/config.toml` はchezmoiで管理します。マシンごとの追加と版の上書きは、Git管理外の `~/.config/mise/config.local.toml` に書きます。例えば次の設定なら、そのマシンだけにNode.js、Python、AWS CLI、Javaを追加します。
+
+```toml
+[tools]
+node = "latest"
+python = "latest"
+aws-cli = "latest"
+java = "temurin"
+```
+
+全候補は [設定例](examples/mise/config.local.toml) にあります。必要な行だけ使い、既存ファイルを全体コピーで上書きしないでください。`latest` は最新版追従、`temurin` は最新のTemurin JDKを選びます。
+一つ追加する場合も、書き込み先を明示します。
 
 ```sh
+mise use --path "$HOME/.config/mise/config.local.toml" go@latest
+```
+
+設定を編集した後は次のいずれかで導入します。`mise-global.sh` は作業中のプロジェクト設定を除き、共通・ローカルのグローバル設定を通常の規則で結合します。
+
+```sh
+cd "$(chezmoi source-path)"
+sh scripts/mise-global.sh install --yes
+# または、ローカル設定の変更を検出するchezmoiで適用する
 chezmoi apply
 ```
 
-`run_onchange_after`が`flake.lock`で固定されたHome Managerのactivation packageをビルドしてCLI環境を有効化し、続けてmiseのグローバル設定に指定されたツールを導入します。Nixまたはmise未導入時の実行状態もスクリプト内容に含まれるため、導入後の`chezmoi apply`で再実行されます。
+プロジェクトが要求する版は、そのリポジトリの `mise.toml` で固定します。グローバルの版を止める必要はありません。例えばJava 17が必要なプロジェクトだけ `java = "temurin-17"` を指定します。kubectlは接続するAPIサーバーとの対応範囲に合わせてプロジェクト側で指定してください。
 
-## 管理するCLI
+共通ツールを明示的に無効化することもできます。ただし `disable_tools` はプロジェクト設定の同じツールも無効にするため、普段使わないだけのツールは最初からローカル設定に追加しない方が適しています。chezmoiやTrivyを無効にすると、設定適用やGit hookが利用できなくなります。
 
-- 基本ツール: Git、tmux、fzf、ripgrep、fd、bat、jq、eza
-- 開発支援: gh、ghq、zoxide、starship、direnv、Java 17、mise、chezmoi
-- クラウド: kubectl、Helm、Terraform、AWS CLI、Google Cloud SDK
+```toml
+[settings]
+disable_tools = ["starship"]
+```
 
-Node.js、pnpm、Bun、Python、uv、Granted、npm製CLI、Yarn、kubectl、Helm、Terraformはmiseで管理し、Nixとの二重管理を避けます。グローバル既定値は互換性を保つリリース系列で指定し、プロジェクト固有のバージョンは各リポジトリの`mise.toml`で上書きします。Grantedだけは対応プラットフォームに配布物がある正確なバージョンへ固定します。
+`config.local.toml` はchezmoiの対象から除外し、追加・上書き・削除を行いません。ローカル設定の読み込みを無効にする `MISE_GLOBAL_CONFIG_FILE` を常用しないでください。
 
-対話シェルでは`mise activate`、非対話シェルではmiseのshimsによってmise管理ツールを解決するため、エージェントが起動する非対話のzshからも`mise exec`なしで`node`や`terraform`などを実行できます。
+Google Cloud CLIが必要なマシンでは明示的に導入します。macOSではCask、UbuntuではGoogle公式aptリポジトリを使います。
 
-Android SDKはAndroid Studioなどでローカルに導入し、chezmoiがOS別の標準パスを検出して`ANDROID_SDK_ROOT`とPATHを設定します。
+```sh
+sh scripts/install-google-cloud.sh
+# macOSでGhosttyが必要な場合
+brew install --cask ghostty
+```
+
+そのほかのOSパッケージも必要なマシンでbrew/aptから追加できます。共通一覧にないという理由で自動削除しません。
 
 ## 通常の更新
 
-dotfilesを更新して適用します。
+設定の更新と共通CLIの追加導入は次で行います。
 
 ```sh
 chezmoi update
 ```
 
-Home Managerだけを手動で再適用する場合は次を実行します。
+`chezmoi apply`はsudoを使わず、Homebrewやaptの一括更新も行いません。OSのパッケージ一覧を変更した場合は、別途再実行します。
 
 ```sh
-home-manager switch --flake ~/.config/nix#default
+cd "$(chezmoi source-path)"
+sh scripts/bootstrap.sh --base-only
 ```
 
-miseで管理するツールだけを手動で再適用する場合は次を実行します。
+共通とマシン固有のツールは、明示的に最新版へ更新します。`latest` でも新しい版の公開だけでは通常切り替わらず、導入済みの版を使います。
 
 ```sh
-mise install
+cd "$(chezmoi source-path)"
+sh scripts/mise-global.sh outdated
+sh scripts/mise-global.sh upgrade --no-prune
 ```
 
-設定したリリース系列内の最新版へ更新する場合は、更新後のバージョンを確認してからアップグレードします。
+基盤CLIの更新はmacOSではHomebrew、Ubuntuではaptの通常の操作で行います。mise自身も同じ管理元から更新し、`mise self-update`は使いません。
+上の更新例は `--no-prune` で旧版を保持します。miseの過去バージョン、brew/aptのキャッシュ整理は動作確認後の別操作です。ローカル設定から項目を外しても、既存のバイナリは自動削除しません。
+
+## シェルとJava・端末設定
+
+`~/.zshenv.d`は環境変数とPATH、`~/.zshrc.d`は対話シェルの初期化を管理します。
+非対話シェルではmiseのshims、対話シェルでは`mise activate zsh`を使います。`~/.local/bin`はPATH末尾に置き、補助ファイル`~/.local/bin/env`がなくても参照できます。
+
+Javaを設定したマシンでは、`JAVA_HOME`をmiseが選択したJavaから設定します。Javaのshimを起動した子プロセスだけでなく、非対話のzshからも参照できます。
+UbuntuのGhostty terminfoは同梱データから `tic -x` で `~/.local/share/terminfo` に生成します。Ghostty本体は導入しません。macOSではGhosttyアプリ同梱のterminfoを利用します。
+
+移行用の `~/.zshenv.d/nix.zsh` は旧ファイルを上書きするため名前を残し、Nixを読み込まず、継承したNixのPATHと証明書変数を除きます。システムの `/etc/zshrc` が再追加したPATHも対話シェル側で除きます。Nix本体やプロファイルは削除しません。
+
+Android SDKはAndroid Studioなどでローカルに導入したものをOS別に検出します。マシン固有設定と秘密情報はGit管理外の `~/.zshrc.local`、`~/.config/ghostty/local.config` に置きます。
+
+## 企業プロキシの証明書
+
+Netskopeなどの社内CAを標準パスから検出し、OSのCAと結合して `~/.local/share/netskope/ca-bundle.crt` を生成します。未検出の環境では何も生成せず、証明書の環境変数も設定しません。証明書はコミットしません。
+
+`SSL_CERT_FILE`、`CURL_CA_BUNDLE`、`GIT_SSL_CAINFO`、`NODE_EXTRA_CA_CERTS`、`AWS_CA_BUNDLE`などへバンドルを渡します。NixのCAとdaemon設定には依存しません。
+JavaのtruststoreはJDK本体を変更せず複製して生成し、初回のmise導入後にも再確認します。`JAVA_TOOL_OPTIONS`はstderrへのバナーを避けるため自動設定しません。
 
 ```sh
-mise outdated
-mise upgrade
+ssl-doctor          # 読み取り専用の診断
+ssl-doctor reset    # 退避後にCAバンドルとJava truststoreを再生成
 ```
 
-NixpkgsとHome Managerを更新する場合は、chezmoiのソースディレクトリでロックファイルを更新します。
-
-```sh
-chezmoi cd
-tmpdir=$(mktemp -d)
-chezmoi execute-template -f dot_config/nix/flake.nix.tmpl > "$tmpdir/flake.nix"
-cp dot_config/nix/home.nix dot_config/nix/flake.lock "$tmpdir/"
-nix flake update --flake "$tmpdir"
-cp "$tmpdir/flake.lock" dot_config/nix/flake.lock
-rm -rf "$tmpdir"
-```
-
-実際のFlakeはchezmoiテンプレートのため、一時ディレクトリへ展開してロックファイルを更新します。半年ごとにnixpkgsとHome Managerを同じ安定版系列へ更新します。`home.stateVersion`は変更しません。
-
-GitHub Actionsはリリースタグに対応するコミットSHAで固定しています。Dependabotが毎週更新を確認し、SHAと同じ行にあるバージョンコメントも更新します。Nix入力はDependabotの対象外のため、上記の`flake.lock`更新手順で管理します。
-
-## 企業プロキシ (TLS傍受) 対応
-
-Netskopeなどの企業プロキシはTLSを傍受し、社内CAで再署名します。このCAを信頼しないCLIはSSL証明書の検証エラーで失敗します。
-
-`chezmoi apply`時に社内CAを標準パスから自動検出し、**システムCAと結合したバンドル**を`~/.local/share/netskope/ca-bundle.crt`へ生成します。Java用のtruststoreも同じディレクトリに作ります。`.zshenv.d/ssl.zsh`が`SSL_CERT_FILE`、`CURL_CA_BUNDLE`、`GIT_SSL_CAINFO`、`NODE_EXTRA_CA_CERTS`などへこのバンドルを渡します。
-
-社内CAを検出できない環境では何も生成せず、環境変数も設定しません。証明書はリポジトリにコミットしません。
-
-バンドルは検出できたシステムCA（macOSの`/etc/ssl/cert.pem`とNixのバンドルなど）をすべて結合し、フィンガープリントで重複を除いたうえで社内CAを加えます。いずれか1つだけを基準にすると、そのバンドルに収録されていないルートを信頼できなくなるためです。結果として既存のシステムルートの上位集合になり、VPN外やプロキシ無効時でも通常の証明書検証は壊れません。
-
-### nix-daemonの設定 (Nix利用時は必須)
-
-マルチユーザーモードのNixは、ソースの取得をrootで動作するdaemonが行うため、シェルの環境変数が効きません。`curl`は成功するのに`nix build`だけ失敗する形で現れます。root権限とホームディレクトリ外の変更が必要なため自動化していません。次を手動で実行します。
-
-```sh
-echo "ssl-cert-file = $HOME/.local/share/netskope/ca-bundle.crt" | sudo tee -a /etc/nix/nix.conf
-sudo launchctl kickstart -k system/org.nixos.nix-daemon
-```
-
-### SSLエラーが出たときは
-
-`ssl-doctor`で原因を切り分けます。傍受の有無、バンドルの整合性と有効期限、環境変数とnix-daemon、各ツールの実接続を診断します。読み取り専用で副作用はありません。
-
-```sh
-ssl-doctor          # 診断
-ssl-doctor reset    # バンドルを作り直して再診断
-```
-
-| 症状 | 対処 |
-| --- | --- |
-| プロキシ更新後にSSLエラー | `ssl-doctor`で原因を確認し、`ssl-doctor reset` |
-| `nix build`だけ失敗 | `ssl-doctor`が指摘するnix-daemonの手順を実行 |
-| 特定のツールだけ失敗 | `ssl-doctor`の接続テストで対象を特定 |
-| 元に戻したい | `rm -rf ~/.local/share/netskope`で無効化 (下記の注意を参照) |
-
-`ssl-doctor reset`は既存バンドルを退避してから作り直し、失敗時は書き戻します。証明書がローテーションされた場合は`chezmoi apply`でも再生成されます。
-
-`rm -rf ~/.local/share/netskope`による無効化は恒久的ではありません。社内CAがローテーションされると`chezmoi apply`が再生成を検知して作り直します。恒久的に止める場合は`~/.zshrc.local`で証明書変数を`unset`するか、社内CAを検出できない状態にします。
-
-### Java
-
-Nix Storeは読み取り専用でJDKの`cacerts`を変更できないため、複製した`~/.local/share/netskope/cacerts`を生成し、パスを`NETSKOPE_JAVA_TRUSTSTORE`で公開します。`JAVA_TOOL_OPTIONS`はJVM起動ごとにstderrへメッセージを出力し、出力を解析するスクリプトを壊すため既定では設定しません。必要な場合は`~/.zshrc.local`に追加します。
+JDKの更新後にtruststoreを更新する場合も `ssl-doctor reset` を使います。必要なJavaアプリだけ、ローカル設定で指定します。
 
 ```sh
 export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=$NETSKOPE_JAVA_TRUSTSTORE -Djavax.net.ssl.trustStorePassword=changeit"
 ```
 
-GradleやMavenは`~/.gradle/gradle.properties`や`MAVEN_OPTS`で個別に指定します。
+社内CAが標準パス以外にある場合は、`NETSKOPE_CA_CERT`を設定してから `ssl-doctor reset` を実行します。`chezmoi apply`にも渡す場合は同じ環境変数をexportしてください。
+HTTPプロキシ変数や証明書検証を無効化する変数は自動設定しません。
+初回セットアップ中のapt/Homebrew自体が社内CAを必要とする場合は、先に組織の手順でOS・パッケージマネージャーの信頼設定を行ってください。ユーザー用のCAバンドルだけではsudo先のaptには適用されません。
 
-### 証明書のパスとプロキシ変数
-
-社内CAが標準以外のパスにある場合や暗号化されている場合は、`~/.zshrc.local`で明示します。
-
-```sh
-export NETSKOPE_CA_CERT="$HOME/.config/certs/corp-ca.pem"
-```
-
-`HTTP_PROXY`などのプロキシ変数は設定しません。Netskopeは既定で透過的に動作し、明示設定はlocalhostや内部通信を壊すためです。必要な場合は`~/.zshrc.local`に置き、`NO_PROXY`へ`localhost,127.0.0.1,::1,.local`を含めます。
-
-`GIT_SSL_NO_VERIFY`、`NODE_TLS_REJECT_UNAUTHORIZED=0`、`PYTHONHTTPSVERIFY=0`は証明書検証自体を無効化するため使いません。
-
-## 秘密情報の検査
-
-Trivyのsecret scannerをコミット前、push前、GitHub Actionsで実行します。Home Managerの適用時に、このリポジトリの`core.hooksPath`が`.githooks`へ設定されます。
-
-pre-commit hookはGit indexを一時ディレクトリへ展開し、ステージ済みのコミット対象だけを検査します。検出時またはTrivy未導入時はコミットを中止します。
-pre-push hookはpush対象refの内容を一時ディレクトリへ展開して検査します。削除だけのpushでは検査を省略し、秘密情報の検出時またはTrivy未導入時はpushを中止します。
-
-リポジトリ全体を手動で検査する場合は次を実行します。
+## 検証と秘密情報検査
 
 ```sh
+sh scripts/verify.sh
 trivy fs --config trivy.yaml .
+git diff --check
 ```
 
-誤検知を除外する場合は、値自体を安易に許可せず、`trivy-secret.yaml`のallow ruleを理由付きで追加します。Markdownも秘密情報の検査対象です。
+`verify.sh`はmacOS/Ubuntuのテンプレートを一時ディレクトリへ展開し、シェル構文、ShellCheck、非対話シェルの回帰テスト、Ghostty terminfoを確認します。実環境の設定やパッケージは変更しません。
+GitHub ActionsはmacOSとUbuntuそれぞれで、共通の最小構成と任意ツールを追加した構成を導入し、一時ホームでコマンドとシェル起動を確認します。環境確認スクリプトは、有効なmise設定に含まれるツールだけを必須とします。ローカルでの展開確認だけでは、別OSの実行確認を代替できません。
 
-## ロールバック
-
-利用可能な世代を確認します。
-
-```sh
-home-manager generations
-```
-
-戻したい世代のNix Storeパスにある`activate`を実行します。
-
-```sh
-/nix/store/<generation>-home-manager-generation/activate
-```
-
-## Homebrewからの段階移行
-
-Nix版とmise版のCLIが正常に動作することを確認してから、重複するHomebrewパッケージを個別に削除します。GUIアプリとHomebrew Caskは今回の移行対象外です。
-
-```sh
-command -v git tmux fzf rg fd bat jq eza gh ghq zoxide starship direnv java gcloud mise chezmoi
-command -v node npm npx pnpm yarn yarnpkg bun python uv granted assume devcontainer gemini kubectl helm terraform
-```
-
-Voltaからの移行時は、上記の代替コマンドをmiseで確認した後、`~/.volta`を`~/.volta.retired`へ自動的に退避します。退避先は自動削除しません。`pnpx`は廃止し、必要な場合は`pnpm dlx`を使用します。
-
-## zsh設定
-
-`~/.zshenv.d`は環境変数とPATH、`~/.zshrc.d`は対話シェルの設定を管理します。任意ツールの初期化はコマンドが存在する場合だけ行います。
-
-`~/.local/bin`は補助ファイル`~/.local/bin/env`の有無にかかわらずPATHの末尾に追加します。同名のコマンドがある場合は、miseやNixなど既存のPATH上のコマンドを優先します。
-
-macOSではGhosttyアプリに同梱されたterminfoを利用します。UbuntuではHome ManagerがGhosttyのterminfoだけを導入して`TERMINFO_DIRS`へ追加するため、Ghosttyから接続したシェルでも`TERM=xterm-ghostty`のままtmuxを起動できます。Ghostty本体はUbuntuへ導入しません。
-
-マシン固有の設定はGit管理外の次のファイルへ記述します。
-
-- `~/.zshrc.local`
-- `~/.config/ghostty/local.config`
+Git hookは `chezmoi apply` の最後に有効化します。pre-commitはステージ済み内容、pre-pushはpush対象refをTrivyで検査し、Trivy未導入時も中止します。
+誤検知の例外は `trivy-secret.yaml` に理由付きの限定ルールとして記録します。Markdownも検査対象です。
 
 ## 主なshell操作
 
@@ -234,7 +189,3 @@ macOSではGhosttyアプリに同梱されたterminfoを利用します。Ubuntu
 - `fassume [options]`: AWSプロファイルをfzfで選択し、`assume-shell`で認証済みの子シェルを開く。例: `fassume --region ap-northeast-1`
 - `assume-shell [profile] [options]`: Grantedで認証した対話zshを子プロセスとして開く。プロファイル省略時はGrantedで選択し、`exit`または`Ctrl-D`で元のシェルへ戻る。例: `assume-shell development --region ap-northeast-1`
 - `shuffle_bg`: Ghosttyの背景画像をランダムに切り替える（macOSのみ）
-
-## `.zshrc.local`からの移行
-
-Java、Android SDK、Google Cloud SDK、Ghostty背景設定はリポジトリへ取り込み済みです。Node.js、pnpm、Bun、Python、uv、Yarn、kubectl、Helm、Terraformはmiseへ移行済みです。既存の`~/.zshrc.local`に同じ設定が残っている場合は、Nix、mise、chezmoiの適用を確認してから該当部分を削除してください。

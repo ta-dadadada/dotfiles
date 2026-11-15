@@ -1,18 +1,24 @@
 #!/bin/sh
 
 # mise-available={{ ne (lookPath "mise") "" }}
+# mise-local-hash={{ $local := joinPath .chezmoi.homeDir ".config/mise/config.local.toml" }}{{ if stat $local }}{{ output "cat" $local | sha256sum }}{{ else }}absent{{ end }}
+# mise-global-hash={{ include "scripts/mise-global.sh" | sha256sum }}
 # mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
 
 set -eu
 
 if command -v mise >/dev/null 2>&1; then
   mise_bin=$(command -v mise)
-elif [ -x "$HOME/.nix-profile/bin/mise" ]; then
-  mise_bin="$HOME/.nix-profile/bin/mise"
 else
   echo "mise is not installed or is not available on PATH." >&2
-  echo "Apply Home Manager, then run: chezmoi apply" >&2
+  echo "Run scripts/bootstrap.sh --base-only, then run: chezmoi apply" >&2
   exit 0
 fi
 
-"$mise_bin" install --yes
+# 共通とローカルの設定を信頼し、プロジェクト設定を除いて導入する。
+"$mise_bin" trust {{ joinPath .chezmoi.homeDir ".config/mise/config.toml" | quote }}
+local_config={{ joinPath .chezmoi.homeDir ".config/mise/config.local.toml" | quote }}
+if [ -f "$local_config" ]; then
+  "$mise_bin" trust "$local_config"
+fi
+sh {{ joinPath .chezmoi.sourceDir "scripts/mise-global.sh" | quote }} install --yes
