@@ -60,6 +60,7 @@ OSパッケージの追加だけなら `sh scripts/bootstrap.sh --base-only` を
 追加例、編集・導入・更新操作は [README](../README.md#マシンごとのツール選択) を参照する。
 
 `scripts/mise-global.sh` は中立な一時ディレクトリからmiseを呼び、作業中のプロジェクト設定だけを除外する。導入と環境確認は同じ読み込み規則を使う。`MISE_GLOBAL_CONFIG_FILE` で共通設定だけを強制するとローカル設定を読まなくなるため、通常運用では設定しない。
+mise本体はOSの配布元から更新して使う。2026.5.12ではグローバルの `config.toml` が `config.local.toml` の同じツールを上書きする挙動を確認している。2026.11.8ではローカル設定の優先を検証済み。Homebrewのbootstrapは `--no-upgrade` のため、既存のmiseの更新は別途行う。
 `run_onchange` はローカル設定の内容ハッシュも含み、変更後のapplyで再実行する。ファイル自体の内容はスクリプトへ埋め込まない。
 
 環境確認はOSの基盤に加え、有効なmise設定の導入状態を調べる。JavaやAWS CLIなど未選択のツールは要求せず、Google Cloud CLIは既に存在する場合だけ起動を検査する。新しい任意ツールをローカル設定へ追加しても、導入状態の確認に別の必須一覧を追加する必要はない。
@@ -70,7 +71,7 @@ OSパッケージの追加だけなら `sh scripts/bootstrap.sh --base-only` を
 `dot_zshenv.d/tools.zsh` はmiseのshimsをPATHへ追加し、`~/.local/bin`は末尾へ置く。対話シェルでは `dot_zshrc.d/tools.zsh` がmiseをactivateする。
 `dot_zshenv.d/runtime.zsh` は選択中のJavaから `JAVA_HOME` を設定し、ユーザー領域のterminfoを参照する。
 
-`dot_zshenv.d/nix.zsh` は旧管理ファイルを上書きするため残す。NixやHome Managerの初期化を行わず、親プロセスやシステム設定から継承したNixのPATH、Nixの `JAVA_HOME` と証明書変数を除く。`dot_zshrc`でも再度除き、システム初期化で再追加されるPATHに対応する。Nixを必要とする別プロジェクトがある場合は、撤去前にその依存を確認する。
+`dot_zshenv.d/nix.zsh` は旧管理ファイルを上書きするため残す。NixやHome Managerの初期化を行わず、親プロセスやシステム設定から継承したNixのPATH、`JAVA_HOME`、証明書パス、terminfoの検索先を除く。対象は `/nix/`、`~/.nix-profile/`、`~/.local/state/nix/` 配下とし、それ以外の独自設定やterminfoの既定検索を表す空要素は保持する。`NIX_SSL_CERT_FILE` は解除する。`dot_zshrc`でも再度除き、システム初期化で再追加されるPATHに対応する。Nixを必要とする別プロジェクトがある場合は、撤去前にその依存を確認する。
 
 ## GrantedとVolta
 

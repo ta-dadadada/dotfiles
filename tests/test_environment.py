@@ -15,6 +15,45 @@ def shell_environment(home, path, **overrides):
 
 
 class EnvironmentTest(unittest.TestCase):
+    def test_nix_jdk_and_certificate_paths_are_cleared_selectively(self):
+        variables = ('JAVA_HOME', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CURL_CA_BUNDLE',
+                     'GIT_SSL_CAINFO', 'REQUESTS_CA_BUNDLE', 'PIP_CERT',
+                     'NODE_EXTRA_CA_CERTS', 'AWS_CA_BUNDLE', 'CARGO_HTTP_CAINFO',
+                     'GRPC_DEFAULT_SSL_ROOTS_FILE_PATH')
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            for prefix in ('/nix/store/old', f'{home}/.nix-profile',
+                           f'{home}/.local/state/nix/profiles/profile'):
+                for value, expected in ((f'{prefix}/cert-or-jdk', 'unset'),
+                                        ('/custom/cert-or-jdk', '/custom/cert-or-jdk')):
+                    with self.subTest(value=value):
+                        env = shell_environment(home, '/usr/bin:/bin',
+                            **dict.fromkeys(variables, value), NIX_SSL_CERT_FILE=value)
+                        result = subprocess.run(['zsh', '-f', '-c',
+                            'source "$1"; shift; '
+                            'for name in "$@"; do print -r -- "${(P)name-unset}"; done; '
+                            '[[ -z "${NIX_SSL_CERT_FILE:-}" ]]',
+                            'zsh', str(ROOT / 'dot_zshenv.d/nix.zsh'), *variables],
+                            env=env, capture_output=True, text=True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stdout.splitlines(),
+                                         [expected] * len(variables))
+
+    def test_nix_terminfo_is_removed_before_new_terminfo_is_installed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            env = shell_environment(home, '/usr/bin:/bin', TERMINFO_DIRS=(
+                f'/nix/store/old/terminfo:{home}/.nix-profile/share/terminfo:'
+                f'{home}/.local/state/nix/profiles/profile/share/terminfo:'
+                '/custom/terminfo::/usr/share/terminfo:'))
+            result = subprocess.run(['zsh', '-f', '-c',
+                'source "$1"; source "$2"; source "$1"; print -r -- "$TERMINFO_DIRS"',
+                'zsh', str(ROOT / 'dot_zshenv.d/nix.zsh'),
+                str(ROOT / 'dot_zshenv.d/runtime.zsh')],
+                env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), '/custom/terminfo::/usr/share/terminfo:')
+
     def test_noninteractive_shell_without_nix_or_optional_tools(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

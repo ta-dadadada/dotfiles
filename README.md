@@ -85,6 +85,7 @@ disable_tools = ["starship"]
 ```
 
 `config.local.toml` はchezmoiの対象から除外し、追加・上書き・削除を行いません。ローカル設定の読み込みを無効にする `MISE_GLOBAL_CONFIG_FILE` を常用しないでください。
+ローカル設定で共通設定の版を上書きできない場合は、mise本体をHomebrew/aptから更新してください。mise 2026.5.12では共通設定が優先される挙動を確認し、2026.11.8ではローカル設定が優先されることを検証しています。
 
 Google Cloud CLIが必要なマシンでは明示的に導入します。macOSではCask、UbuntuではGoogle公式aptリポジトリを使います。
 
@@ -120,6 +121,7 @@ sh scripts/mise-global.sh upgrade --no-prune
 ```
 
 基盤CLIの更新はmacOSではHomebrew、Ubuntuではaptの通常の操作で行います。mise自身も同じ管理元から更新し、`mise self-update`は使いません。
+既存のHomebrew版miseはbootstrapでも更新しません。移行時やmise自体の更新時は `brew update` と `brew upgrade mise` を明示的に実行してください。
 上の更新例は `--no-prune` で旧版を保持します。miseの過去バージョン、brew/aptのキャッシュ整理は動作確認後の別操作です。ローカル設定から項目を外しても、既存のバイナリは自動削除しません。
 
 ## シェルとJava・端末設定
@@ -131,6 +133,7 @@ Javaを設定したマシンでは、`JAVA_HOME`をmiseが選択したJavaから
 UbuntuのGhostty terminfoは同梱データから `tic -x` で `~/.local/share/terminfo` に生成します。Ghostty本体は導入しません。macOSではGhosttyアプリ同梱のterminfoを利用します。
 
 移行用の `~/.zshenv.d/nix.zsh` は旧ファイルを上書きするため名前を残し、Nixを読み込まず、継承したNixのPATHと証明書変数を除きます。システムの `/etc/zshrc` が再追加したPATHも対話シェル側で除きます。Nix本体やプロファイルは削除しません。
+Nixを指す `JAVA_HOME` とterminfoの検索先も除きます。Nix以外の証明書パスやterminfoの検索先は保持します。
 
 Android SDKはAndroid Studioなどでローカルに導入したものをOS別に検出します。マシン固有設定と秘密情報はGit管理外の `~/.zshrc.local`、`~/.config/ghostty/local.config` に置きます。
 
