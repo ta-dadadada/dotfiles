@@ -51,7 +51,8 @@ jobs:
           chezmoi --source "$GITHUB_WORKSPACE" --destination "$destination" \
             --override-data "$data" --no-tty apply --exclude scripts
           if [[ "$RUNNER_OS" == Linux ]]; then
-            chezmoi --override-data "$data" execute-template \
+            chezmoi --source "$GITHUB_WORKSPACE" --destination "$destination" \
+              --override-data "$data" execute-template \
               -f run_onchange_after_20-install-terminfo.sh.tmpl > "$RUNNER_TEMP/terminfo.sh"
             sh "$RUNNER_TEMP/terminfo.sh"
           fi
