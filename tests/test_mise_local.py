@@ -27,8 +27,19 @@ class MiseLocalTest(unittest.TestCase):
             self.skipTest('mise and chezmoi are required')
         # CIではchezmoiがshimの場合がある。fixtureの設定に切り替える前に実体を得る。
         if Path(self.chezmoi).parent.name == 'shims':
-            self.chezmoi = subprocess.check_output(
-                [self.mise, 'which', 'chezmoi'], text=True).strip()
+            resolved = subprocess.run([self.mise, 'which', 'chezmoi'],
+                                      capture_output=True, text=True)
+            if resolved.returncode == 0:
+                self.chezmoi = resolved.stdout.strip()
+            else:
+                # 移行途中では未選択のshimがPATH上の旧chezmoiへフォールバックする。
+                search_path = os.pathsep.join(
+                    entry for entry in os.environ.get('PATH', '').split(os.pathsep)
+                    if Path(entry).resolve() != Path(self.chezmoi).parent.resolve())
+                fallback = shutil.which('chezmoi', path=search_path)
+                if not fallback:
+                    resolved.check_returncode()
+                self.chezmoi = fallback
         (self.work / 'bin/mise').symlink_to(self.mise)
         self.env = dict(HOME=str(self.home), ZDOTDIR=str(self.home),
                         PATH=f'{self.work}/bin:/opt/homebrew/bin:/usr/bin:/bin',

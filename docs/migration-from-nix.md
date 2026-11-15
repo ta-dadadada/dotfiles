@@ -50,6 +50,8 @@ brew list --cask > "$backup/brew-casks.txt"
 このバージョンのcheckoutを用意する。通常の `chezmoi update` で先に適用せず、ソースだけ更新してからセットアップする。未コミット変更がある場合は保存・確認し、強制リセットしない。
 
 macOSはXcode Command Line ToolsとHomebrew、Ubuntuはgitとsudoが必要。企業プロキシ内ではOSとapt/Homebrewの証明書信頼を先に整える。
+既存のHomebrew版miseがある場合は、先に `brew update` と `brew upgrade mise` で更新する。bootstrapは既存のbrewパッケージを更新しない。Ubuntuはbootstrapでmise公式aptのパッケージを導入・更新する。
+mise 2026.5.12ではローカル設定による共通ツールの版の上書きが効かない挙動を確認しているため、OSの配布元の最新版を使う。2026.11.8でローカル設定の優先を検証済み。
 
 共通のmise設定はchezmoi、ghq、fzf、bat、fd、starship、Trivyの7種類へ絞っている。これまでグローバルで使っていたNode.js、Python、Java、クラウドCLIなどを引き続き使うマシンでは、適用前に `~/.config/mise/config.local.toml` へ必要な項目を移す。[任意ツールの設定例](../examples/mise/config.local.toml)から必要な行だけを使い、既存のローカル設定を上書きしない。
 グローバルは原則 `latest`、Javaは `temurin` とし、プロジェクトで要求される版は各リポジトリで固定する。項目を外しても旧バイナリは自動削除しないが、設定がなくなるとmiseのshimから選択されなくなる。
@@ -81,6 +83,7 @@ zsh -i -c 'command -v ghq chezmoi; fzf --zsh >/dev/null'
 ```
 
 確認スクリプトはOSの基盤、有効な共通・ローカル設定で選択されたmiseツール、fzfのシェル連携、UbuntuのGhostty terminfoを検査する。Javaを選んだマシンではJDKと `JAVA_HOME` も確認する。実際の認証やネットワーク接続の成否は別に確認する。
+シェル初期化はNixを指す証明書・JDK・terminfoのパスを解除し、Nix以外のローカル設定は保持する。社内CAの生成がない環境でも、旧Nixの証明書パスを継承しない。
 
 - GhosttyからUbuntuへ接続してtmuxを起動できる。
 - 普段使うプロジェクトでビルド・テストを実行できる。
