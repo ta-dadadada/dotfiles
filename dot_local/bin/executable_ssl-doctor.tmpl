@@ -23,7 +23,6 @@ head_() { printf '\n== %s ==\n' "$*"; }
 
 find_base_bundle() {
   for candidate in \
-    /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt \
     /etc/ssl/cert.pem \
     /etc/ssl/certs/ca-certificates.crt \
     /etc/pki/tls/certs/ca-bundle.crt; do
@@ -113,8 +112,7 @@ check_bundle() {
     # 常に一定数あり、企業CAのローテーション検知の妨げになる。
     : > "$chk_dir/system"
     for base in /etc/ssl/cert.pem /etc/ssl/certs/ca-certificates.crt \
-                /etc/pki/tls/certs/ca-bundle.crt \
-                /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt; do
+                /etc/pki/tls/certs/ca-bundle.crt; do
       [ -f "$base" ] || continue
       awk -v d="$chk_dir/base" '/BEGIN CERTIFICATE/{n++;f=1}
         f{print > (d "." n ".pem")}
@@ -162,20 +160,19 @@ check_bundle() {
   fi
 }
 
-# 3. 環境変数とnix-daemonを確認する。
-#    「curlは通るのにnix buildだけ落ちる」典型例をここで気づける。
+# 3. 各ツールにCAバンドルが渡っていることを確認する。
 check_env() {
   head_ "Environment variables"
 
   unset_vars=""
   for var in SSL_CERT_FILE CURL_CA_BUNDLE GIT_SSL_CAINFO REQUESTS_CA_BUNDLE \
-             PIP_CERT NODE_EXTRA_CA_CERTS AWS_CA_BUNDLE NIX_SSL_CERT_FILE \
+             PIP_CERT NODE_EXTRA_CA_CERTS AWS_CA_BUNDLE \
              CARGO_HTTP_CAINFO GRPC_DEFAULT_SSL_ROOTS_FILE_PATH; do
     eval "value=\${$var:-}"
     if [ -z "$value" ]; then
       unset_vars="$unset_vars $var"
     elif [ "$value" != "$bundle" ]; then
-      # バンドル未使用時のNIX_SSL_CERT_FILEはNixの既定値であり異常ではない。
+      # バンドルを生成済みの場合だけ別パスを警告する。
       if [ -r "$bundle" ]; then
         warn "$var points elsewhere: $value"
       fi
@@ -191,25 +188,6 @@ check_env() {
     fi
   else
     ok "all certificate variables point at the bundle"
-  fi
-
-  head_ "Nix daemon"
-  if [ ! -f /etc/nix/nix.conf ]; then
-    note "/etc/nix/nix.conf does not exist; Nix may not be installed"
-  elif grep -q '^ssl-cert-file' /etc/nix/nix.conf; then
-    ok "nix-daemon has ssl-cert-file configured"
-  elif [ -r "$bundle" ]; then
-    # daemonはrootで動き環境変数を継承しないため、ここが最も見落とされやすい。
-    fail "nix-daemon is not configured; source downloads will fail"
-    note "curl works but 'nix build' fails. Run these manually:"
-    note "  echo 'ssl-cert-file = $bundle' | sudo tee -a /etc/nix/nix.conf"
-{{- if eq .chezmoi.os "darwin" }}
-    note "  sudo launchctl kickstart -k system/org.nixos.nix-daemon"
-{{- else }}
-    note "  sudo systemctl restart nix-daemon"
-{{- end }}
-  else
-    ok "nix-daemon needs no change (no bundle in use)"
   fi
 }
 
@@ -295,7 +273,7 @@ do_reset() {
   # バンドルはスクリプト生成物でありchezmoiの管理対象ではないため、
   # chezmoi applyでは対象にできない。生成スクリプトを直接展開して実行する。
   # NETSKOPE_CA_FORCEで無条件に作り直し、chezmoiのstateは一切触らない。
-  # これによりHome Managerやmiseの再実行を巻き込まない。
+  # これによりmiseの再実行を巻き込まない。
   script=$(mktemp)
   render_err=$(mktemp)
   # shellcheck disable=SC2064

@@ -5,7 +5,7 @@ if [[ -f "$HOME/.local/bin/env" ]]; then
   . "$HOME/.local/bin/env"
 fi
 
-# Nix管理のCLIを優先しつつ、ユーザー用コマンドも解決する。
+# OS管理のCLIを優先しつつ、ユーザー用コマンドも解決する。
 path=("${(@)path:#$HOME/.local/bin}" "$HOME/.local/bin")
 
 # mise shims

@@ -1,0 +1,64 @@
+name: Environment
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  environment:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install OS packages
+        env:
+          DOTFILES_SKIP_GUI: "1"
+        run: sh scripts/bootstrap.sh --base-only
+
+      - name: Install common tools in an isolated directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MISE_GLOBAL_CONFIG_FILE="$GITHUB_WORKSPACE/dot_config/mise/config.toml"
+          export MISE_GLOBAL_CONFIG_ROOT="$GITHUB_WORKSPACE"
+          export MISE_TRUSTED_CONFIG_PATHS="$GITHUB_WORKSPACE"
+          export MISE_DATA_DIR="$RUNNER_TEMP/mise"
+          export MISE_CACHE_DIR="$RUNNER_TEMP/mise-cache"
+          mise install --yes
+          for name in MISE_GLOBAL_CONFIG_FILE MISE_GLOBAL_CONFIG_ROOT MISE_TRUSTED_CONFIG_PATHS MISE_DATA_DIR MISE_CACHE_DIR; do
+            echo "$name=${!name}" >> "$GITHUB_ENV"
+          done
+          echo "$MISE_DATA_DIR/shims" >> "$GITHUB_PATH"
+
+      - name: Verify templates and shell behavior
+        run: sh scripts/verify.sh
+
+      - name: Check noninteractive environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/test-home"
+          mkdir -p "$destination"
+          data=$(printf '{"chezmoi":{"homeDir":"%s"}}' "$destination")
+          chezmoi --source "$GITHUB_WORKSPACE" --destination "$destination" \
+            --override-data "$data" --no-tty apply --exclude scripts
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            chezmoi --override-data "$data" execute-template \
+              -f run_onchange_after_20-install-terminfo.sh.tmpl > "$RUNNER_TEMP/terminfo.sh"
+            sh "$RUNNER_TEMP/terminfo.sh"
+          fi
+          HOME="$destination" ZDOTDIR="$destination" zsh -c \
+            'sh "$1/scripts/check-environment.sh"' zsh "$GITHUB_WORKSPACE"
+          HOME="$destination" ZDOTDIR="$destination" TERM=xterm-256color zsh -i -c \
+            'command -v node terraform ghq; fzf --zsh >/dev/null'
+
+      - name: Scan secrets
+        run: trivy fs --config trivy.yaml .

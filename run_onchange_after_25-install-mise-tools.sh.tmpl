@@ -7,12 +7,14 @@ set -eu
 
 if command -v mise >/dev/null 2>&1; then
   mise_bin=$(command -v mise)
-elif [ -x "$HOME/.nix-profile/bin/mise" ]; then
-  mise_bin="$HOME/.nix-profile/bin/mise"
 else
   echo "mise is not installed or is not available on PATH." >&2
-  echo "Apply Home Manager, then run: chezmoi apply" >&2
+  echo "Run scripts/bootstrap.sh --base-only, then run: chezmoi apply" >&2
   exit 0
 fi
 
+# 作業中のプロジェクト設定を巻き込まず、グローバル設定を導入する。
+cd {{ .chezmoi.homeDir | quote }}
+# chezmoiで配置した設定を信頼し、新しいシェルでも読み込めるよう記録する。
+"$mise_bin" trust {{ joinPath .chezmoi.homeDir ".config/mise/config.toml" | quote }}
 "$mise_bin" install --yes

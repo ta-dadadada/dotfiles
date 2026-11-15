@@ -1,4 +1,4 @@
-# HomebrewはNixで管理しないアプリケーションとパッケージに使用する。
-if command -v brew >/dev/null 2>&1; then
-  eval "$(brew shellenv)"
+# macOSの基盤CLIとGUIアプリをHomebrewで管理する。
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
 fi

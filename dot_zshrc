@@ -1,3 +1,11 @@
+# /etc/zshrcが.zshenvの後に追加した旧NixのPATHも除く。
+if [[ -r "$HOME/.zshenv.d/nix.zsh" ]]; then
+  source "$HOME/.zshenv.d/nix.zsh"
+fi
+if [[ -z "${JAVA_HOME:-}" && -r "$HOME/.zshenv.d/runtime.zsh" ]]; then
+  source "$HOME/.zshenv.d/runtime.zsh"
+fi
+
 # Enable completion system
 autoload -Uz compinit && compinit -u
 

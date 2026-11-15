@@ -1,0 +1,17 @@
+#!/bin/sh
+# platform={{ .chezmoi.os }}/{{ .chezmoi.arch }}
+# terminfo-hash={{ include "assets/terminfo/ghostty.terminfo" | sha256sum }}
+set -eu
+{{ if eq .chezmoi.os "linux" -}}
+if ! command -v tic >/dev/null 2>&1; then
+  echo "tic is missing. Run scripts/bootstrap.sh --base-only, then chezmoi apply." >&2
+  exit 1
+fi
+work=$(mktemp)
+trap 'rm -f "$work"' EXIT HUP INT TERM
+cat > "$work" <<'GHOSTTY_TERMINFO'
+{{ include "assets/terminfo/ghostty.terminfo" }}
+GHOSTTY_TERMINFO
+mkdir -p {{ joinPath .chezmoi.homeDir ".local/share/terminfo" | quote }}
+tic -x -o {{ joinPath .chezmoi.homeDir ".local/share/terminfo" | quote }} "$work"
+{{ end -}}

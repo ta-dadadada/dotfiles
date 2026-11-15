@@ -1,0 +1,9 @@
+#!/bin/sh
+# mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
+# ca-script-hash={{ include "run_onchange_after_15-build-ca-bundle.sh.tmpl" | sha256sum }}
+set -eu
+# 初回のCA生成時にはJDKがまだない場合があるため、miseの導入後に再確認する。
+script=$(mktemp)
+trap 'rm -f "$script"' EXIT HUP INT TERM
+chezmoi --source {{ .chezmoi.sourceDir | quote }} execute-template -f {{ joinPath .chezmoi.sourceDir "run_onchange_after_15-build-ca-bundle.sh.tmpl" | quote }} > "$script"
+sh "$script"

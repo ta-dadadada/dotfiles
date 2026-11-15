@@ -11,8 +11,6 @@ fi
 
 if command -v mise >/dev/null 2>&1; then
   mise_bin=$(command -v mise)
-elif [ -x "$HOME/.nix-profile/bin/mise" ]; then
-  mise_bin="$HOME/.nix-profile/bin/mise"
 else
   echo "Volta was not retired because mise is not installed." >&2
   exit 0
