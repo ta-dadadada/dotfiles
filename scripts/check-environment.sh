@@ -53,6 +53,9 @@ if selected aws-cli && ! sh "$root/scripts/mise-global.sh" exec -- aws --version
   echo "FAIL aws --version"; status=1
 fi
 if selected granted; then
+  if ! sh "$root/scripts/mise-global.sh" exec -- granted --version >/dev/null 2>&1; then
+    echo "FAIL granted --version"; status=1
+  fi
   for tool in granted assume assumego; do
     if ! sh "$root/scripts/mise-global.sh" which "$tool" >/dev/null 2>&1; then
       echo "FAIL Granted command: $tool"; status=1

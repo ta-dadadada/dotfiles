@@ -36,6 +36,12 @@ class MiseLocalTest(unittest.TestCase):
                         MISE_CACHE_DIR=str(self.work / 'cache'),
                         MISE_STATE_DIR=str(self.work / 'state'),
                         MISE_TRUSTED_CONFIG_PATHS=str(self.work))
+        terminfo = self.home / '.local/share/terminfo'
+        terminfo.mkdir(parents=True)
+        subprocess.run(['tic', '-x', '-o', str(terminfo),
+                        str(ROOT / 'assets/terminfo/ghostty.terminfo')],
+                       check=True, capture_output=True)
+        self.env['TERMINFO_DIRS'] = str(terminfo) + ':'
         self.local = self.home / '.config/mise/config.local.toml'
         self.base_node = self.tool('base-node', 'node')
         self.local_node = self.tool('local-node', 'node')
@@ -105,6 +111,9 @@ class MiseLocalTest(unittest.TestCase):
             binary = self.work / 'bin' / command
             binary.write_text('#!/bin/sh\nexit 0\n')
             binary.chmod(0o755)
+        uname = self.work / 'bin/uname'
+        uname.write_text('#!/bin/sh\nprintf "Linux\\n"\n')
+        uname.chmod(0o755)
         def check():
             return subprocess.run(['sh', str(ROOT / 'scripts/check-environment.sh')],
                                   cwd=self.project, env=self.env,
