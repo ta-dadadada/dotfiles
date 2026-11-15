@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # mise-available={{ ne (lookPath "mise") "" }}
+# mise-local-hash={{ $local := joinPath .chezmoi.homeDir ".config/mise/config.local.toml" }}{{ if stat $local }}{{ output "cat" $local | sha256sum }}{{ else }}absent{{ end }}
+# mise-global-hash={{ include "scripts/mise-global.sh" | sha256sum }}
 # mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
 
 set -eu
@@ -13,8 +15,10 @@ else
   exit 0
 fi
 
-# 作業中のプロジェクト設定を巻き込まず、グローバル設定を導入する。
-cd {{ .chezmoi.homeDir | quote }}
-# chezmoiで配置した設定を信頼し、新しいシェルでも読み込めるよう記録する。
+# 共通とローカルの設定を信頼し、プロジェクト設定を除いて導入する。
 "$mise_bin" trust {{ joinPath .chezmoi.homeDir ".config/mise/config.toml" | quote }}
-"$mise_bin" install --yes
+local_config={{ joinPath .chezmoi.homeDir ".config/mise/config.local.toml" | quote }}
+if [ -f "$local_config" ]; then
+  "$mise_bin" trust "$local_config"
+fi
+sh {{ joinPath .chezmoi.sourceDir "scripts/mise-global.sh" | quote }} install --yes

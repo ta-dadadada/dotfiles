@@ -1,4 +1,6 @@
 #!/bin/sh
+# mise-global-hash={{ include "scripts/mise-global.sh" | sha256sum }}
+# mise-local-hash={{ $local := joinPath .chezmoi.homeDir ".config/mise/config.local.toml" }}{{ if stat $local }}{{ output "cat" $local | sha256sum }}{{ else }}absent{{ end }}
 # mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
 # ca-script-hash={{ include "run_onchange_after_15-build-ca-bundle.sh.tmpl" | sha256sum }}
 set -eu

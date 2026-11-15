@@ -1,6 +1,8 @@
 #!/bin/sh
+# mise-global-hash={{ include "scripts/mise-global.sh" | sha256sum }}
 
 # mise-available={{ ne (lookPath "mise") "" }}
+# mise-local-hash={{ $local := joinPath .chezmoi.homeDir ".config/mise/config.local.toml" }}{{ if stat $local }}{{ output "cat" $local | sha256sum }}{{ else }}absent{{ end }}
 # mise-config-hash={{ include "dot_config/mise/config.toml" | sha256sum }}
 
 set -eu
@@ -9,17 +11,15 @@ if [ ! -d "$HOME/.volta" ]; then
   exit 0
 fi
 
-if command -v mise >/dev/null 2>&1; then
-  mise_bin=$(command -v mise)
-else
+if ! command -v mise >/dev/null 2>&1; then
   echo "Volta was not retired because mise is not installed." >&2
   exit 0
 fi
 
 for command_name in node npm npx pnpm yarn yarnpkg devcontainer gemini; do
-  if ! "$mise_bin" which "$command_name" >/dev/null 2>&1; then
+  if ! sh {{ joinPath .chezmoi.sourceDir "scripts/mise-global.sh" | quote }} which "$command_name" >/dev/null 2>&1; then
     echo "Volta was not retired because mise does not provide: $command_name" >&2
-    exit 1
+    exit 0
   fi
 done
 

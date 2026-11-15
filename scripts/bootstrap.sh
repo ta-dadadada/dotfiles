@@ -25,14 +25,16 @@ esac
 export PATH
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
-# 初回適用前のグローバル設定を混ぜず、実行するcheckoutだけを信頼する。
-export MISE_CONFIG_DIR="$work/config"
-export MISE_TRUSTED_CONFIG_PATHS="$root"
-export MISE_GLOBAL_CONFIG_FILE="$root/dot_config/mise/config.toml"
-export MISE_GLOBAL_CONFIG_ROOT="$root"
-cd "$work"
-"$mise_bin" install --yes chezmoi
-chezmoi_bin=$("$mise_bin" which chezmoi)
+# chezmoiの取得だけを隔離し、実際のapplyには一時設定を持ち込まない。
+chezmoi_bin=$(
+  export MISE_CONFIG_DIR="$work/config"
+  export MISE_TRUSTED_CONFIG_PATHS="$root"
+  export MISE_GLOBAL_CONFIG_FILE="$root/dot_config/mise/config.toml"
+  export MISE_GLOBAL_CONFIG_ROOT="$root"
+  cd "$work"
+  "$mise_bin" install --yes chezmoi >&2
+  "$mise_bin" which chezmoi
+)
 PATH="$(dirname "$chezmoi_bin"):$PATH"
 export PATH
 "$chezmoi_bin" --source "$root" apply

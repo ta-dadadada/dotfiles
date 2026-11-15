@@ -16,7 +16,10 @@ macOSの基盤CLIはHomebrew、Ubuntuの基盤CLIはapt、共通CLIとランタ�
 
 - `.chezmoitemplates/packages/`: macOSのBrewfileとUbuntuのaptパッケージ一覧
 - `scripts/bootstrap.sh`: OSパッケージ、mise経由のchezmoi、設定適用の入口
-- `scripts/check-environment.sh`: 移行後のコマンド・JDK・端末設定の確認
+- `scripts/check-environment.sh`: 選択されたツールと端末設定の確認
+- `scripts/mise-global.sh`: プロジェクト設定を除き、共通・ローカル設定を結合してmiseを実行
+- `scripts/install-google-cloud.sh`: 必要なマシンでのみGoogle Cloud CLIを明示導入
+- `examples/mise/config.local.toml`: マシン固有設定の記入例
 - `scripts/verify.sh`: 両OSの一時展開とシェル・回帰テスト
 - `assets/terminfo/`: Ghostty terminfoのソースと配布元・ライセンス
 - `dot_config/mise/`: mise のグローバルツール設定
@@ -44,7 +47,7 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 - `chezmoi apply`でsudoやOSパッケージの更新を実行しない。明示的なbootstrap操作に分ける。
 - 割り当ての詳細は `docs/tool-management.md`、既存環境の移行は `docs/migration-from-nix.md` に従う。
 - Android SDK はリポジトリから導入せず、OS ごとのローカルインストール先を検出する。
-- マシン固有の設定や秘密情報はコミットしない。必要な設定は `~/.zshrc.local` または `~/.config/ghostty/local.config` に置く。
+- マシン固有の設定や秘密情報はコミットしない。必要な設定は `~/.config/mise/config.local.toml`、`~/.zshrc.local`、`~/.config/ghostty/local.config` に置く。
 - 企業プロキシの CA 証明書はリポジトリに含めず、標準パスから検出する。検出できない環境では何も生成せず、環境変数も設定しない。
 
 この境界を変える必要がある場合は、実装だけでなく `README.md` の管理範囲とセットアップ手順も更新する。
@@ -69,8 +72,8 @@ chezmoi の命名規則により、`dot_foo` は展開時に `.foo` になる。
 ### パッケージと依存更新
 
 - macOSの基盤CLIは `.chezmoitemplates/packages/Brewfile`、Ubuntuは `.chezmoitemplates/packages/ubuntu.txt` に追加する。
-- 共通CLIとランタイムは `dot_config/mise/config.toml` に互換性を保つリリース系列で追加する。0.xはminor系列を使い、配布制約がある場合だけ理由付きで正確なバージョンへ固定する。
-- Ubuntuの追加aptリポジトリはmiseとGoogle公式を基本とし、専用の署名鍵で対象を限定する。
+- 共通CLIは `dot_config/mise/config.toml` に最小限だけ置き、原則 `latest` を使う。任意のランタイム・開発CLIは `~/.config/mise/config.local.toml` またはプロジェクトで選ぶ。Javaの最新版追従は `temurin` を使う。固定の例外には理由と解除条件を残す。
+- Ubuntuの基盤はmise公式リポジトリだけを追加し、Google公式は明示的な任意導入に分ける。追加する場合は専用の署名鍵で対象を限定する。
 - 古いツールやキャッシュの削除は更新と分ける。Nixの実環境への適用や撤去を検証に使わない。
 - GitHub ActionsはコミットSHAで固定し、同じ行のバージョンコメントも更新する。
 

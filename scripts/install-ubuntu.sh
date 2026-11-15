@@ -21,17 +21,12 @@ sudo apt-get install -y --no-install-recommends "$@"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
-# 追加リポジトリはmiseとGoogle公式に限定し、それぞれ専用鍵へ紐付ける。
+# 基盤セットアップではmiseの公式リポジトリだけを追加する。
 sudo install -d -m 755 /etc/apt/keyrings
 curl -fsSL https://mise.jdx.dev/gpg-key.pub -o "$work/mise.asc"
 gpg --batch --dearmor --output "$work/mise.gpg" "$work/mise.asc"
 sudo install -m 644 "$work/mise.gpg" /etc/apt/keyrings/dotfiles-mise.gpg
 printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/dotfiles-mise.gpg] https://mise.jdx.dev/deb stable main' > "$work/mise.list"
 sudo install -m 644 "$work/mise.list" /etc/apt/sources.list.d/dotfiles-mise.list
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg -o "$work/google.asc"
-gpg --batch --dearmor --output "$work/google.gpg" "$work/google.asc"
-sudo install -m 644 "$work/google.gpg" /etc/apt/keyrings/dotfiles-google-cloud.gpg
-printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/dotfiles-google-cloud.gpg] https://packages.cloud.google.com/apt cloud-sdk main' > "$work/google.list"
-sudo install -m 644 "$work/google.list" /etc/apt/sources.list.d/dotfiles-google-cloud.list
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends mise google-cloud-cli
+sudo apt-get install -y --no-install-recommends mise

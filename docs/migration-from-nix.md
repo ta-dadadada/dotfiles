@@ -51,16 +51,21 @@ brew list --cask > "$backup/brew-casks.txt"
 
 macOSはXcode Command Line ToolsとHomebrew、Ubuntuはgitとsudoが必要。企業プロキシ内ではOSとapt/Homebrewの証明書信頼を先に整える。
 
+共通のmise設定はchezmoi、ghq、fzf、bat、fd、starship、Trivyの7種類へ絞っている。これまでグローバルで使っていたNode.js、Python、Java、クラウドCLIなどを引き続き使うマシンでは、適用前に `~/.config/mise/config.local.toml` へ必要な項目を移す。[任意ツールの設定例](../examples/mise/config.local.toml)から必要な行だけを使い、既存のローカル設定を上書きしない。
+グローバルは原則 `latest`、Javaは `temurin` とし、プロジェクトで要求される版は各リポジトリで固定する。項目を外しても旧バイナリは自動削除しないが、設定がなくなるとmiseのshimから選択されなくなる。
+
 ```sh
 cd "$(chezmoi source-path)"
 sh scripts/bootstrap.sh
 ```
 
-- macOSはHomebrewの基盤パッケージ、Google Cloud CLI、Ghosttyを導入する。
-- Ubuntuはaptの基盤パッケージとmise・Googleの公式リポジトリを設定する。Ubuntu標準リポジトリのuniverseが必要。
-- 共通CLIはmiseへ導入する。Java 17も含む。
+- macOSはHomebrewの基盤パッケージを導入する。Google Cloud CLIとGhostty本体は任意導入とする。
+- Ubuntuはaptの基盤パッケージとmise公式リポジトリを設定する。Ubuntu標準リポジトリのuniverseが必要。
+- 共通CLIとローカル設定で選んだ任意ツールをmiseへ導入する。ローカル設定は初回の適用から読み込み、その後も保持する。
 - 設定の競合は内容を見て解決する。マシン固有の設定と認証情報を上書きしない。
 - 旧Google Cloud SDK、旧miseバイナリ、重複するbrewパッケージはまだ削除しない。
+
+必要なマシンでは `sh scripts/install-google-cloud.sh`、macOSのGhostty本体は `brew install --cask ghostty` で明示的に導入する。
 
 Ubuntuで同じ公式リポジトリを別のファイル・鍵で登録済みの場合は、重複したsourceと `Signed-By` を確認する。既存の管理者設定を自動削除せず、同じ配布元の設定を一つに整理してから再実行する。
 
@@ -71,11 +76,11 @@ Ubuntuで同じ公式リポジトリを別のファイル・鍵で登録済み�
 ```sh
 cd "$(chezmoi source-path)"
 sh scripts/check-environment.sh
-zsh -c 'command -v node terraform ghq chezmoi; printf "%s\n" "$JAVA_HOME"; java -version'
-zsh -i -c 'command -v node terraform ghq; fzf --zsh >/dev/null'
+zsh -c 'command -v ghq chezmoi; fzf --zsh >/dev/null'
+zsh -i -c 'command -v ghq chezmoi; fzf --zsh >/dev/null'
 ```
 
-確認スクリプトは必須コマンド、共通CLIの起動、JDK、`JAVA_HOME`、fzfのシェル連携、UbuntuのGhostty terminfoを検査する。実際の認証やネットワーク接続の成否は別に確認する。
+確認スクリプトはOSの基盤、有効な共通・ローカル設定で選択されたmiseツール、fzfのシェル連携、UbuntuのGhostty terminfoを検査する。Javaを選んだマシンではJDKと `JAVA_HOME` も確認する。実際の認証やネットワーク接続の成否は別に確認する。
 
 - GhosttyからUbuntuへ接続してtmuxを起動できる。
 - 普段使うプロジェクトでビルド・テストを実行できる。

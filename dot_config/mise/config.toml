@@ -1,27 +1,12 @@
 [tool_alias]
 yarn = "npm:@yarnpkg/cli-dist"
 
+# 全マシンのシェル操作とdotfiles管理に必要なCLIだけを共有する。
 [tools]
-node = "24"
-pnpm = "10"
-bun = "1"
-python = "3.14"
-uv = "0.9"
-granted = "0.38.0"
-"npm:@devcontainers/cli" = "0.78"
-"npm:@google/gemini-cli" = "0.28"
-yarn = "4"
-kubectl = "1.37"
-helm = "4"
-terraform = "1.16"
-
-# 両OSでコマンド名とリリース系列をそろえる共通CLI。
-chezmoi = "2"
-ghq = "1"
-fzf = "0.75"
-bat = "0.26"
-fd = "10"
-starship = "1"
-trivy = "0.76"
-aws-cli = "2"
-java = "temurin-17"
+chezmoi = "latest"
+ghq = "latest"
+fzf = "latest"
+bat = "latest"
+fd = "latest"
+starship = "latest"
+trivy = "latest"

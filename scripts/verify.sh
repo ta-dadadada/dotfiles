@@ -27,6 +27,7 @@ for platform in darwin linux; do
   done
   test ! -e "$destination/scripts"
   test ! -e "$destination/assets"
+  test ! -e "$destination/examples"
   test ! -e "$destination/.config/nix"
   if [ "$platform" = linux ]; then
     sh "$work/run_onchange_after_20-install-terminfo.sh.tmpl.linux.sh"

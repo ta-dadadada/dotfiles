@@ -1,4 +1,5 @@
 #!/bin/sh
+# mise-global-hash={{ include "scripts/mise-global.sh" | sha256sum }}
 
 # 企業プロキシ(Netskope)のTLS傍受用CAバンドルを生成する。
 # 証明書はリポジトリ外にあるためincludeでハッシュ化できない。
@@ -151,7 +152,7 @@ fi
 java_home=""
 mise_java_home=""
 if command -v mise >/dev/null 2>&1; then
-  mise_java_home=$(cd "$HOME" && mise where java 2>/dev/null) || mise_java_home=""
+  mise_java_home=$(sh {{ joinPath .chezmoi.sourceDir "scripts/mise-global.sh" | quote }} where java 2>/dev/null) || mise_java_home=""
 fi
 for candidate in \
   "$mise_java_home" \

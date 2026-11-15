@@ -14,3 +14,5 @@ scripts
 tests
 assets
 .agent-goal.md
+.config/mise/config.local.toml
+examples
