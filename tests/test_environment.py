@@ -4,8 +4,14 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def shell_environment(home, path, **overrides):
+    # CIのmise/XDG設定や親シェルのJavaをfixtureへ持ち込まない。
+    return dict(HOME=str(home), ZDOTDIR=str(home), PATH=path, **overrides)
 
 
 class EnvironmentTest(unittest.TestCase):
@@ -18,9 +24,21 @@ class EnvironmentTest(unittest.TestCase):
                     (ROOT / 'dot_zshenv.d' / name).read_text())
             (home / '.zshenv').write_text((ROOT / 'dot_zshenv').read_text())
             (home / '.zshrc').write_text((ROOT / 'dot_zshrc').read_text())
-            env = dict(os.environ, HOME=directory, ZDOTDIR=directory,
-                       PATH=f'/nix/store/old/bin:{directory}/.nix-profile/bin:/usr/bin:/bin',
-                       JAVA_HOME='/nix/store/old-jdk')
+            # Ubuntuのようにmise本体がPATH上にある環境を再現する。
+            binaries = home / 'bin'
+            binaries.mkdir()
+            ci_data = home / 'ci-mise'
+            (ci_data / 'jdk/bin').mkdir(parents=True)
+            (ci_data / 'jdk/bin/java').write_text('#!/bin/sh\nexit 0\n')
+            (ci_data / 'jdk/bin/java').chmod(0o755)
+            (binaries / 'mise').write_text(
+                '#!/bin/sh\n[ -n "${MISE_DATA_DIR:-}" ] || exit 1\n'
+                'printf "%s/jdk\\n" "$MISE_DATA_DIR"\n')
+            (binaries / 'mise').chmod(0o755)
+            with patch.dict(os.environ, {'MISE_DATA_DIR': str(ci_data)}):
+                env = shell_environment(home,
+                    f'/nix/store/old/bin:{home}/.nix-profile/bin:{binaries}:/usr/bin:/bin',
+                    JAVA_HOME='/nix/store/old-jdk')
             result = subprocess.run(['zsh', '-c',
                 '[[ "$PATH" != *nix* && -z "${JAVA_HOME:-}" ]]'],
                 env=env, capture_output=True, text=True)
@@ -46,8 +64,7 @@ class EnvironmentTest(unittest.TestCase):
                 f'printf "%s\\n" "{jdk}"\n')
             (binaries / 'mise').chmod(0o755)
             (home / '.local/share/terminfo').mkdir(parents=True)
-            env = dict(os.environ, HOME=directory, ZDOTDIR=directory,
-                       PATH=f'{binaries}:/usr/bin:/bin',
+            env = shell_environment(home, f'{binaries}:/usr/bin:/bin',
                        TERMINFO_DIRS='/nix/store/old/share/terminfo:/custom/terminfo')
             result = subprocess.run(['zsh', '-f', '-c',
                 'source "$1"; before=$TERMINFO_DIRS; source "$1"; [[ "$before" == "$TERMINFO_DIRS" &&  "$JAVA_HOME" == "$HOME/jdk" && '
